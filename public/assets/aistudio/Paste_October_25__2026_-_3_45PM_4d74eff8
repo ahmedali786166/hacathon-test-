@@ -1,0 +1,632 @@
+
+You are a senior full-stack engineer, database architect, AI engineer, cybersecurity specialist, QA engineer, and premium enterprise UI/UX designer.
+
+Build a brand-new application from scratch named HCM Lite for the Saylani Hackathon. This is a complete Human Capital Management (HCM) system, not a landing page, static mockup, or frontend-only prototype.
+
+Start with a NEW project and implement the actual source code, frontend, backend, persistent database, authentication, business logic, role permissions, dashboards, AI assistant, and tests.
+
+Do not assume previous project files exist. Inspect the available environment, create a suitable architecture, install dependencies, implement the app, run it, inspect errors, test the main workflows, and fix issues.
+
+ABSOLUTE PRIORITIES:
+1. Implement all required hackathon modules.
+2. Make the Department and Designation dropdowns in employee forms work reliably, with actual database-backed suggestions.
+3. Implement a working Gemini AI assistant that speaks English and Roman Urdu.
+4. Integrate Gemini through a server-side GEMINI_API_KEY environment secret.
+5. Enforce real database persistence and server-side security.
+6. Test the real application in Preview before claiming it is complete.
+7. Never seed fake employees, attendance, salaries, payroll, leave requests, or dashboard metrics.
+
+Do not return only a plan. Build the actual application.
+
+====================================================
+1. TECHNOLOGY STACK AND ARCHITECTURE
+====================================================
+
+Preferred stack:
+- React + TypeScript + Vite.
+- Tailwind CSS and shadcn/ui or equivalent.
+- Node.js + TypeScript + Express or compatible server routes.
+- PostgreSQL + Prisma ORM where supported.
+- Zod for validation.
+- bcrypt/bcryptjs for password hashing.
+- Secure authentication using expiring sessions or JWT.
+- A chart library for dashboards.
+- A PDF library for payslips.
+- Gemini API for AI functionality.
+- Automated tests for important calculations and permissions.
+
+Use Google AI Studio's supported full-stack architecture. Ensure server-side code actually executes on the server in the chosen environment.
+
+If PostgreSQL cannot be provisioned, use a persistent relational database such as SQLite for local/demo use and clearly document the limitation and production migration. Do not use in-memory arrays or browser localStorage as the primary database.
+
+Create a maintainable folder structure for:
+- Frontend pages and components.
+- Backend routes and middleware.
+- Database schema and migrations.
+- Business services.
+- Validation.
+- Authentication and authorization.
+- AI integration and tools.
+- Payroll calculations.
+- Audit logging.
+- Tests.
+
+Create README.md and .env.example with placeholder values only.
+
+Never commit or hardcode API keys, database passwords, JWT secrets, or other credentials.
+
+====================================================
+2. PREMIUM LUXURY UI DESIGN
+====================================================
+
+Create a visually impressive, refined enterprise SaaS product.
+
+Visual identity:
+- Midnight navy #0B1120.
+- Graphite surfaces.
+- Warm ivory.
+- Champagne gold #D6B46A.
+- Muted slate typography.
+- Elegant borders, subtle shadows, restrained gradients, and refined spacing.
+
+UI requirements:
+- Premium collapsible sidebar.
+- Responsive top navigation.
+- Breadcrumbs and clear page titles.
+- User profile menu and notifications.
+- Beautiful KPI cards and charts using real data.
+- Professional searchable, sortable, filterable, paginated tables.
+- Elegant login and first-run onboarding.
+- High-quality employee profiles, attendance calendar, leave approval queue, payroll pages, and AI chat.
+- Responsive desktop, tablet, and mobile layouts.
+- Proper loading skeletons, error messages, empty states, validation feedback, and success notifications.
+- Accessible contrast, keyboard navigation, and visible focus states.
+- Optional light/dark theme if practical.
+
+Do not use decoration as a substitute for working functionality. Every button, dropdown, filter, and form must perform its intended action.
+
+====================================================
+3. DATABASE AND FIRST-RUN INITIALIZATION
+====================================================
+
+The fresh database must contain zero business records.
+
+Allowed on initialization:
+- Database schema.
+- Indexes.
+- Migrations.
+- Necessary technical configuration.
+
+Not allowed:
+- Dummy employees.
+- Fake salaries.
+- Fake attendance.
+- Fake payroll.
+- Fake leave requests.
+- Fabricated notifications.
+- Fake chart values or dashboard counts.
+
+Show a first-run setup wizard that lets the user:
+1. Enter company information.
+2. Configure office settings.
+3. Create the first Admin account.
+4. Initialize the company and enter the application.
+
+After initialization, disable public Admin registration.
+
+Persist all application records in the database and verify they survive an application restart wherever the hosting environment supports persistent storage.
+
+Never use hardcoded dashboard values or mock API responses in the production application.
+
+====================================================
+4. AUTHENTICATION AND ROLE PERMISSIONS
+====================================================
+
+Implement three roles.
+
+ADMIN:
+- Configure company settings.
+- Manage departments, designations, leave types, holidays, and users.
+- Create HR accounts.
+- View authorized company-wide information.
+- Access audit logs.
+- Review payroll.
+- Exclusively finalize and lock payroll.
+
+HR:
+- Register and manage employees.
+- Create employee login access.
+- Review attendance.
+- Submit attendance corrections with reasons.
+- Review and approve/reject leave.
+- Manage announcements.
+- Prepare and review payroll drafts.
+- Cannot finalize or lock payroll.
+
+EMPLOYEE:
+- View permitted personal information.
+- Check in and check out.
+- View own attendance history.
+- Submit and track own leave.
+- View own leave balance.
+- Download own finalized payslips.
+- View permitted announcements.
+- Use the AI assistant within personal permissions.
+
+Security requirements:
+- Enforce authorization on the backend, not only in the frontend.
+- Verify role, company scope, and record ownership on every protected operation.
+- Prevent insecure direct object references, privilege escalation, mass assignment, and unauthorized data access.
+- Employees must never see another employee's confidential salary, payslip, attendance details, leave records, or private profile fields.
+- Hash passwords with bcrypt/bcryptjs.
+- Implement secure login/logout, expiring sessions or JWT, protected routes, password change, and temporary-password handling.
+- Use secure cookies when supported.
+- Apply rate limiting to sensitive endpoints.
+- Never expose password hashes or session secrets.
+
+====================================================
+5. ORGANIZATION SETTINGS
+====================================================
+
+Build functional management pages and backend operations for:
+- Company profile.
+- Office hours and timezone.
+- Grace period.
+- Weekend settings.
+- Optional office location and geofence radius.
+- Departments.
+- Designations.
+- Leave types and quotas.
+- Company holidays.
+- User and role management.
+- Configured company policies.
+
+Default rules:
+- Office start time: 09:00.
+- Grace period: 15 minutes.
+- Late after 09:15.
+- Half-day threshold: fewer than 5 working hours.
+- Weekends: Saturday and Sunday.
+- Annual leave: 14 days.
+- Sick leave: 8 days.
+- Casual leave: 10 days.
+- Unpaid leave: unlimited.
+
+Make settings configurable by Admin. Apply leave defaults to eligible employees when their records are created.
+
+Never create fake departments or designations merely to populate dropdowns.
+
+====================================================
+6. CRITICAL REQUIREMENT: DEPARTMENT AND DESIGNATION DROPDOWNS
+====================================================
+
+This requirement is extremely important.
+
+In earlier attempts, the employee registration form displayed "Select Department" and "Select Designation", but clicking them showed no suggestions.
+
+DO NOT REPEAT THIS BUG.
+
+Implement and verify the following behavior in both Create Employee and Edit Employee forms.
+
+DEPARTMENT DROPDOWN:
+1. Load department records from the actual backend API and database.
+2. When the user opens the dropdown, display all valid departments.
+3. If the dropdown is searchable, filter suggestions while typing.
+4. Allow keyboard navigation and mouse selection.
+5. Display the selected department correctly.
+6. Show a loading indicator while fetching records.
+7. If there are no departments, show "No departments found" and a useful message explaining how an authorized user can create one.
+8. If the API fails, show a readable error and a retry action.
+9. Save the selected department ID to the employee record.
+10. When editing the employee, load and display the previously saved department.
+
+DESIGNATION DROPDOWN:
+1. Load designation records from the actual backend API and database.
+2. When opened, show valid available designations.
+3. If designations are linked to departments, filter them by the selected department.
+4. Refresh the available designations whenever the department changes.
+5. Clear the old designation if it does not belong to the newly selected department.
+6. Show a helpful empty state if no valid designation exists.
+7. Allow authorized users to navigate to Organization Settings to create a designation.
+8. Save the selected designation ID.
+9. Restore the saved designation correctly when editing an employee.
+10. Validate the relationship on the backend before saving.
+
+UI AND API REQUIREMENTS:
+- Use a proper searchable Select/Combobox component, not a decorative input.
+- Ensure dropdown menus are not clipped or hidden behind modals, sidebars, dialogs, or overflow containers.
+- Fix z-index, stacking context, portal, positioning, focus, and pointer-event problems.
+- Ensure options are visible and clickable in both light and dark themes.
+- Ensure options are not white-on-white, transparent, or hidden behind other elements.
+- Do not use stale state or an incorrect API response shape.
+- Confirm frontend and backend field names match.
+- Handle empty arrays, loading, network errors, unauthorized responses, and server failures.
+- Refetch or refresh the correct options after a department/designation is created.
+- Do not use hardcoded fake options.
+- Never allow an employee to save a department or designation that does not exist.
+- Where applicable, validate that the selected designation belongs to the selected department.
+- Revalidate data on the backend even if the frontend already validates it.
+
+REQUIRED TEST:
+1. Open Organization Settings.
+2. Create a real department.
+3. Create one or more designations associated with that department.
+4. Open Create Employee.
+5. Click Department and verify suggestions visibly appear.
+6. Select the department.
+7. Click Designation and verify the matching suggestions appear.
+8. Select the designation.
+9. Save the employee.
+10. Reopen the employee and verify both selections persist.
+11. Edit the department and verify incompatible designations are cleared/refreshed.
+12. Repeat in browser Preview at desktop and mobile sizes.
+
+Do not declare the application complete unless this test passes in the running app.
+
+If no departments exist on a fresh database, the empty state is correct; silently displaying no menu is not. Make the reason clear and provide a working path to create the required records.
+
+Apply the same quality standard to every dropdown throughout the application.
+
+====================================================
+7. EMPLOYEE MANAGEMENT
+====================================================
+
+Implement:
+- Employee registration, viewing, editing, activation/deactivation, and search.
+- Employee ID, name, email, phone, department, designation, join date, employment status, and salary structure.
+- Secure employee login provisioning by HR.
+- Employee directory with search, filters, sorting, and pagination.
+- Employee 360 profile.
+- CSV import with dry-run preview, row-level validation, duplicate detection, and explicit confirmation.
+- CSV export respecting the caller's permissions.
+
+Validate all data on both frontend and backend.
+
+Prevent duplicate employee IDs and duplicate account emails.
+
+Do not expose salary information in general directory API responses. Only authorized roles may view salary details for permitted purposes.
+
+====================================================
+8. ATTENDANCE MANAGEMENT
+====================================================
+
+Implement real server-side attendance.
+
+Employees can:
+- Check in.
+- Check out.
+- View today's attendance.
+- View daily and monthly history.
+- See late, present, half-day, and missing-checkout statuses.
+
+Rules:
+- Timestamps must be generated and validated on the server.
+- Reject duplicate check-in with HTTP 409.
+- Reject invalid check-out.
+- Mark arrivals after 09:15 as Late.
+- If recorded working time is below 5 hours, classify it as Half-day according to the defined calculation.
+- Identify missing checkout explicitly.
+- If no attendance record exists and there is no approved leave on a working day, classify the employee as Absent.
+- Exclude configured weekends and company holidays from ordinary absence calculations.
+- Consider approved leave when determining absence.
+
+HR/Admin:
+- Attendance calendar and reports.
+- Employee, department, date, and status filters.
+- Corrections with a mandatory reason.
+- Audit history containing original value, corrected value, actor, timestamp, and reason.
+
+Do not trust timestamps submitted by the browser. Optional camera/geolocation checks must not block core attendance.
+
+====================================================
+9. LEAVE MANAGEMENT
+====================================================
+
+Implement:
+- Configurable leave types.
+- Per-employee balances.
+- Leave request creation, history, cancellation where permitted, approval, and rejection.
+- Start date, end date, type, reason, status, reviewer, review timestamp, and comment.
+- HR/Admin approval queue.
+- Team leave calendar.
+- Leave balance history.
+
+Calculate leave days using working days only, excluding configured weekends and company holidays.
+
+Reject:
+- Overlapping active requests with HTTP 422.
+- Insufficient paid leave balance with HTTP 422.
+- Invalid date ranges.
+- Invalid or unauthorized leave actions.
+
+Pending leave must not be treated as approved leave. Avoid duplicate balance deductions. Use database transactions for approval and balance updates.
+
+Unpaid leave is unlimited by default.
+
+SMART LEAVE:
+Users may type requests such as:
+- "I need sick leave next Monday for two days."
+- "Mujhe aglay Monday se do din ki sick leave chahiye."
+- "Kal ghar mein zaroori kaam hai, casual leave apply karni hai."
+- "Mujhe 3 din ki chutti chahiye."
+
+Gemini should extract leave type, dates or duration, and reason.
+
+Use the actual current date and company timezone. Ask clarification when information is ambiguous. Prefill the standard leave form and display the interpreted details, working-day duration, and authorized leave balance.
+
+The user must review and explicitly submit the request. AI must never autonomously submit or approve leave.
+
+====================================================
+10. PAYROLL ENGINE
+====================================================
+
+Implement a real payroll engine using actual employee salaries, attendance, approved leave, employment dates, and payroll-period settings.
+
+Salary rules:
+- Gross salary = 1.5 × basic salary.
+- HRA = 40% of basic salary.
+- Medical allowance = 10% of basic salary.
+- Remaining gross component = gross minus basic, HRA, and medical allowance.
+
+Daily gross = gross salary divided by the configured working days in the relevant month.
+
+Deductions:
+- Apply absence and unpaid-leave deductions.
+- Half-day deduction = 0.5 × daily gross.
+- Handle joining/leaving proration consistently.
+- Apply late penalties only when explicitly configured by company policy.
+- Show validation warnings when required salary or attendance data is missing.
+
+ANNUAL TAX SLABS:
+- Up to PKR 600,000: 0%.
+- PKR 600,001–1,200,000: 5% of the amount above PKR 600,000.
+- PKR 1,200,001–2,400,000: PKR 30,000 + 15% above PKR 1,200,000.
+- PKR 2,400,001–3,600,000: PKR 210,000 + 25% above PKR 2,400,000.
+- Above PKR 3,600,000: PKR 510,000 + 35% above PKR 3,600,000.
+
+The second slab's tax is 5% of the amount above PKR 600,000, reaching PKR 30,000 at PKR 1,200,000.
+
+Implement boundary calculations, annualization, and monthly tax allocation correctly. Document assumptions.
+
+Workflow:
+- HR prepares and reviews payroll drafts.
+- Admin alone finalizes and locks payroll.
+- Locked payroll cannot be silently modified or recalculated.
+- Post-lock corrections must be explicitly authorized and audited.
+- Generate downloadable professional PDF payslips.
+- Employees can download only their own finalized payslips.
+- Use PKR formatting.
+
+Never fabricate payroll data or claim that a draft is final.
+
+====================================================
+11. DASHBOARDS AND ANALYTICS
+====================================================
+
+Build separate Admin, HR, and Employee dashboards.
+
+Admin/HR metrics, where authorized:
+- Total and active headcount.
+- Present, absent, late, half-day, and missing-checkout counts.
+- Attendance trends.
+- Pending and approved leave.
+- Department headcount.
+- Leave trends.
+- Payroll summaries where authorized.
+
+Employee dashboard:
+- Personal attendance.
+- Leave balances and requests.
+- Personal finalized payslips.
+- Relevant announcements and notifications.
+
+Every number, chart, and insight must come from actual database queries/calculations.
+
+Filters must update actual results. Empty company data must produce honest empty states, not fake metrics.
+
+====================================================
+12. GEMINI AI ASSISTANT — ENGLISH AND ROMAN URDU
+====================================================
+
+Implement a genuinely functional AI assistant using Google's Gemini API.
+
+API CONFIGURATION:
+- Read the API key from the server-side environment variable GEMINI_API_KEY.
+- Use the official supported Gemini SDK/API integration available in the environment.
+- Select a model supported by the configured account.
+- Never hardcode the API key in source files, frontend code, browser requests, or GitHub.
+- Never expose the key in client responses, logs, or source maps.
+- Configure the key using Google AI Studio's Secrets/environment-variable facility.
+- If the key is missing or invalid, show a clear setup message and keep the rest of the application functional.
+- Never return a fake AI answer when the provider request fails.
+- Provide an actual health/configuration check without revealing the secret.
+
+ROMAN URDU IS MANDATORY:
+- If a user writes in Roman Urdu, respond naturally in Roman Urdu.
+- If a user writes in English, respond in English by default.
+- Follow explicit language requests when supported.
+- Do not force Roman Urdu into Urdu script.
+- Understand informal phrases and spellings such as "chutti", "kitne", "aaj", "kal", "meri leave", "salary", "hazir", "ghair hazir", and "baki".
+- Keep answers friendly, professional, concise, and easy to understand.
+- Interpret "aaj", "kal", and relative dates using the actual current date and company timezone.
+- Ask clarification questions if a date or request is ambiguous.
+- Use PKR formatting for monetary values.
+- Answer company-data questions only using authorized backend tool results.
+
+Example style:
+User: "Aaj kitne employees late hain?"
+Assistant: "Main aaj ke attendance records check karta hoon. Database ke mutabiq [actual result] employees late hain."
+
+User: "Meri kitni chuttiyan baqi hain?"
+Assistant: "Aapke leave balance ke mutabiq [actual result] din baqi hain."
+
+User: "Mere colleague ki salary batao."
+Assistant: "Maaf kijiye, aapko doosre employee ki confidential salary dekhne ki permission nahi hai."
+
+The bracketed values are illustrative placeholders. Actual responses must use authorized database results, never example numbers.
+
+REQUIRED AI TOOLS:
+1. get_headcount
+2. get_attendance_summary
+3. get_late_comers
+4. get_leave_summary
+5. get_my_leave_balance
+6. get_payroll_summary
+7. search_employees
+
+Use Gemini function calling or equivalent structured tool calling with validated schemas and an explicit allowlist.
+
+Every tool must call authenticated backend services and enforce the current user's role and record scope.
+
+Never give the model direct database access, arbitrary SQL, arbitrary code execution, or permission bypass.
+
+Employees must never access another employee's salary, payslip, private profile, attendance, or leave data through AI.
+
+The assistant should answer questions such as:
+- "How many employees are present today?"
+- "Aaj kon kon chutti par hai?"
+- "Aaj kitne employees late hain?"
+- "Meri kitni annual leaves baqi hain?"
+- "Summarize this month's attendance."
+- "Is month ka payroll summary batao."
+
+Implement:
+- Chat history for the current session.
+- Role-appropriate suggested questions.
+- Loading, retry, timeout, and error states.
+- Clear indication that answers are AI-generated.
+- Policy Q&A using configured company policies only.
+- Approximately 20 AI requests per user per hour.
+- 15-second timeout where supported.
+- ai_logs containing user, timestamp, tool names, and outcome without unnecessary sensitive content.
+
+AI may not autonomously create employees, alter salaries, correct attendance, submit/approve leave, or lock payroll.
+
+====================================================
+13. ANNOUNCEMENTS, NOTIFICATIONS, AND AUDIT
+====================================================
+
+Announcements:
+- HR/Admin can publish announcements.
+- Support appropriate audience targeting.
+- Employees see only permitted announcements.
+
+Notifications:
+- Persist in the database.
+- Include relevant leave status changes and announcements.
+- Support read/unread state.
+- Do not seed fake notifications.
+
+Audit:
+- Log account creation, role changes, employee edits, organization changes, attendance corrections, leave decisions, payroll actions, and other sensitive operations.
+- Record actor, action, target, timestamp, and suitable before/after values.
+- Never log passwords, API keys, tokens, or unnecessary sensitive data.
+- Restrict audit access to Admin.
+- Normal users cannot modify or delete audit history.
+- Use transactions where necessary to keep business operations and audit events consistent.
+
+====================================================
+14. REQUIRED PAGES
+====================================================
+
+Implement working pages for:
+- Login and first-run setup.
+- Role-specific dashboards.
+- Employee directory and create/edit forms.
+- Department and Designation management.
+- Employee 360.
+- CSV import/export.
+- Organization settings, holidays, leave types, and user management.
+- Attendance check-in/out, history, calendar, reports, and corrections.
+- Leave request, Smart Leave, balance, calendar, and approval queue.
+- Salary structures, payroll draft, payroll review, finalization/locking, and PDF payslips.
+- AI assistant.
+- Announcements and notifications.
+- Admin-only audit logs.
+- Profile and password management.
+
+All controls must be functional and all protected routes must enforce server-side permissions.
+
+====================================================
+15. REQUIRED SECURITY AND AUTOMATED TESTS
+====================================================
+
+Implement:
+- Secure password hashing.
+- Authentication and server-side RBAC.
+- Record-level authorization.
+- Request validation.
+- Parameterized database operations.
+- Rate limiting and security headers.
+- Protection against IDOR and privilege escalation.
+- Database transactions.
+- Centralized error handling.
+- Safe logging and secret management.
+
+Add tests for:
+- Department/designation API data loading.
+- Department/designation dropdown options and filtering.
+- Saving and reloading selected values.
+- Invalid department/designation relationships.
+- Duplicate attendance check-in.
+- Late and half-day calculation.
+- Working-day leave calculation.
+- Overlapping leave and insufficient balance.
+- Tax slab boundaries.
+- Payroll locking.
+- Employee record isolation.
+- Employee access to own payslip.
+- Unauthorized colleague salary requests.
+- AI tool authorization and failure handling.
+
+====================================================
+16. REQUIRED END-TO-END DEMO
+====================================================
+
+Use a fresh empty database and test the real application:
+
+1. Create company and Admin account.
+2. Configure office settings.
+3. Create a department and designations.
+4. Open the employee form and confirm Department suggestions appear.
+5. Select a department and confirm Designation suggestions appear.
+6. Save the employee and reopen the form to verify the selected values persist.
+7. Change the department and confirm incompatible designations are cleared.
+8. Create an HR account.
+9. HR registers two or three employees through the UI.
+10. Employee signs in and checks in.
+11. Employee uses Smart Leave in Roman Urdu.
+12. AI prefills the leave form; the employee reviews and submits.
+13. HR approves the request.
+14. HR asks Gemini in Roman Urdu: "Aaj kon kon chutti par hai?"
+15. HR requests an attendance summary and prepares a payroll draft.
+16. Admin finalizes and locks payroll.
+17. Employee downloads their own finalized PDF payslip.
+18. Employee asks for a colleague's salary and AI refuses without disclosing it.
+19. Admin reviews the audit log.
+20. Restart the app and verify database persistence.
+
+If the AI provider, database, or hosting environment is unavailable, disclose the exact limitation rather than faking success.
+
+====================================================
+17. BUILD, TEST, AND DELIVERY
+====================================================
+
+Do not stop after generating code.
+
+- Create the complete project from scratch.
+- Install required dependencies.
+- Create database schema and migrations.
+- Implement all required pages and backend APIs.
+- Configure GEMINI_API_KEY using server-side secrets.
+- Start the application and inspect terminal/runtime errors.
+- Run build and tests.
+- Open Preview and verify dropdowns, login, employee registration, attendance, leave, payroll, and AI.
+- Fix errors, broken imports, incorrect API responses, invisible dropdown menus, and nonfunctional buttons.
+- Provide README.md, .env.example, database setup, AI setup, deployment instructions, role permissions, payroll assumptions, and demo walkthrough.
+- Report what was actually tested and any remaining limitations.
+
+Do not seed dummy business data. Do not expose secrets. Do not claim a feature is complete unless it has been verified.
+
+FINAL COMMAND:
+Build the complete HCM Lite application now from scratch. Prioritize working features, security, reliable dropdowns, real database persistence, and the Roman Urdu Gemini assistant. Run the app, test the actual user flows, fix failures, and deliver the working project rather than a plan or mockup.

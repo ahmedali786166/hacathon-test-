@@ -1,0 +1,6 @@
+{
+  "name": "HCM Lite - Saylani Hackathon",
+  "description": "Complete Human Capital Management (HCM) system with persistent relational database, Pakistani tax & payroll engine, Roman Urdu Gemini AI assistant, attendance, leave, and role-based permissions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
