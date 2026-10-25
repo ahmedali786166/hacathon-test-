@@ -34,7 +34,7 @@ export function generateToken(user: AuthUser): string {
   );
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
+export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     let token = '';
     const authHeader = req.headers.authorization;
@@ -51,7 +51,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     const decoded = jwt.verify(token, JWT_SECRET) as AuthUser;
     
     // Verify user is still active in database
-    const dbUser = queryOne<any>(
+    const dbUser = await queryOne<any>(
       'SELECT id, email, role, employee_id, full_name, is_active FROM users WHERE id = ?',
       [decoded.id]
     );

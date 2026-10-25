@@ -13,14 +13,14 @@ export interface AuditParams {
   ipAddress?: string;
 }
 
-export function logAudit(params: AuditParams): void {
+export async function logAudit(params: AuditParams): Promise<void> {
   try {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const beforeStr = params.beforeState ? JSON.stringify(params.beforeState) : null;
     const afterStr = params.afterState ? JSON.stringify(params.afterState) : null;
 
-    run(
+    await run(
       `INSERT INTO audit_logs (id, actor_id, actor_email, actor_role, action, target_type, target_id, before_state, after_state, ip_address, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [

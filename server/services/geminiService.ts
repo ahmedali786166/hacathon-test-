@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import { query, queryOne, run } from '../db/database.js';
-import { calculateWorkingDaysBetween } from './workingDaysService.js';
+import { calculateWorkingDaysBetween, getTodayDateStr } from './workingDaysService.js';
 import crypto from 'crypto';
 
 export interface AssistantContext {
@@ -202,17 +202,17 @@ const searchEmployeesDecl: FunctionDeclaration = {
 
 // Tool execution logic enforcing RBAC
 async function executeAiTool(name: string, args: any, ctx: AssistantContext): Promise<any> {
-  const todayStr = '2026-10-24';
+  const todayStr = getTodayDateStr();
 
   switch (name) {
     case 'get_headcount': {
       if (ctx.userRole === 'EMPLOYEE') {
-        const row = queryOne<any>('SELECT count(1) as total FROM employees WHERE status = "ACTIVE"');
+        const row = await queryOne<any>(`SELECT count(1) as total FROM employees WHERE status = 'ACTIVE'`);
         return { totalActiveEmployees: row?.total || 0 };
       }
-      const total = queryOne<any>('SELECT count(1) as c FROM employees');
-      const active = queryOne<any>('SELECT count(1) as c FROM employees WHERE status = "ACTIVE"');
-      const byDept = query<any>(`
+      const total = await queryOne<any>('SELECT count(1) as c FROM employees');
+      const active = await queryOne<any>(`SELECT count(1) as c FROM employees WHERE status = 'ACTIVE'`);
+      const byDept = await query<any>(`
         SELECT d.name as department, count(e.id) as count 
         FROM departments d 
         LEFT JOIN employees e ON e.department_id = d.id AND e.status = 'ACTIVE'
@@ -229,7 +229,7 @@ async function executeAiTool(name: string, args: any, ctx: AssistantContext): Pr
       const targetDate = args?.date || todayStr;
       if (ctx.userRole === 'EMPLOYEE') {
         if (!ctx.employeeId) return { error: 'No employee record linked to your user account.' };
-        const myAtt = queryOne<any>(
+        const myAtt = await queryOne<any>(
           'SELECT status, check_in_time, check_out_time, total_working_hours FROM attendance WHERE employee_id = ? AND date = ?',
           [ctx.employeeId, targetDate]
         );
@@ -239,8 +239,8 @@ async function executeAiTool(name: string, args: any, ctx: AssistantContext): Pr
         };
       }
 
-      const totalEmployees = queryOne<any>('SELECT count(1) as c FROM employees WHERE status = "ACTIVE"')?.c || 0;
-      const records = query<any>('SELECT status, count(1) as count FROM attendance WHERE date = ? GROUP BY status', [targetDate]);
+      const totalEmployees = (await queryOne<any>(`SELECT count(1) as c FROM employees WHERE status = 'ACTIVE'`))?.c || 0;
+      const records = await query<any>('SELECT status, count(1) as count FROM attendance WHERE date = ? GROUP BY status', [targetDate]);
       const counts: Record<string, number> = {
         PRESENT: 0,
         LATE: 0,
@@ -271,7 +271,7 @@ async function executeAiTool(name: string, args: any, ctx: AssistantContext): Pr
       if (ctx.userRole === 'EMPLOYEE') {
         return { error: 'Access denied. Only HR and Admin can view other employees late arrivals.' };
       }
-      const lateList = query<any>(`
+      const lateList = await query<any>(`
         SELECT e.employee_code, e.first_name || ' ' || e.last_name as name, d.name as department, a.check_in_time 
         FROM attendance a
         JOIN employees e ON e.id = a.employee_id
@@ -288,7 +288,7 @@ async function executeAiTool(name: string, args: any, ctx: AssistantContext): Pr
 
     case 'get_leave_summary': {
       const targetDate = args?.date || todayStr;
-      const leaves = query<any>(`
+      const leaves = await query<any>(`
         SELECT e.first_name || ' ' || e.last_name as name, d.name as department, lt.name as leave_type, lr.start_date, lr.end_date
         FROM leave_requests lr
         JOIN employees e ON e.id = lr.employee_id
@@ -315,7 +315,7 @@ async function executeAiTool(name: string, args: any, ctx: AssistantContext): Pr
         return { error: 'No employee profile linked to current account.' };
       }
       const currentYear = new Date(todayStr).getFullYear();
-      const balances = query<any>(`
+      const balances = await query<any>(`
         SELECT lt.name as leave_type, lt.code, lb.total_days, lb.used_days, lb.pending_days, (lb.total_days - lb.used_days) as remaining_days
         FROM leave_balances lb
         JOIN leave_types lt ON lt.id = lb.leave_type_id
@@ -336,7 +336,7 @@ async function executeAiTool(name: string, args: any, ctx: AssistantContext): Pr
         };
       }
       const month = args?.month || todayStr.substring(0, 7);
-      const run = queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
+      const run = await queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
       if (!run) {
         return {
           month,
@@ -355,7 +355,7 @@ async function executeAiTool(name: string, args: any, ctx: AssistantContext): Pr
 
     case 'search_employees': {
       const q = `%${(args?.query || '').trim()}%`;
-      const rows = query<any>(`
+      const rows = await query<any>(`
         SELECT e.id, e.employee_code, e.first_name, e.last_name, e.email, d.name as department, des.title as designation, e.status, e.basic_salary
         FROM employees e
         LEFT JOIN departments d ON d.id = e.department_id
@@ -428,11 +428,12 @@ export async function chatWithAssistant(
     });
 
     const callerDetails = `\nCaller Details: Name=${ctx.userName}, Email=${ctx.userEmail}, Role=${ctx.userRole}, EmployeeId=${ctx.employeeId || 'None'}`;
+    const systemInstruction = SYSTEM_INSTRUCTION.replaceAll('2026-10-24', getTodayDateStr());
 
     const response = await generateWithFallback(ai, {
       contents,
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION + callerDetails,
+        systemInstruction: systemInstruction + callerDetails,
         tools: [{ functionDeclarations: tools }],
       },
     });
@@ -468,7 +469,7 @@ export async function chatWithAssistant(
       const secondResponse = await generateWithFallback(ai, {
         contents: secondCallContents,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION + callerDetails,
+          systemInstruction: systemInstruction + callerDetails,
         },
       });
 
@@ -481,7 +482,7 @@ export async function chatWithAssistant(
 
     // Log to ai_logs table for auditability
     try {
-      run(
+      await run(
         `INSERT INTO ai_logs (id, user_id, prompt_summary, language, tools_called, outcome, latency_ms, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -506,7 +507,7 @@ export async function chatWithAssistant(
     const errorDetails = error?.message || String(error);
 
     try {
-      run(
+      await run(
         `INSERT INTO ai_logs (id, user_id, prompt_summary, language, tools_called, outcome, latency_ms, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -545,7 +546,7 @@ export async function parseSmartLeaveRequest(
   interpretationSummary: string;
   availableBalance: number;
 }> {
-  const leaveTypes = query<any>('SELECT id, name, code FROM leave_types');
+  const leaveTypes = await query<any>('SELECT id, name, code FROM leave_types');
 
   let availableBalance = 0;
   const currentYear = 2026;
@@ -622,11 +623,11 @@ Respond strictly in valid JSON matching this schema:
   // Calculate working days
   const startDate = parsed.start_date || '2026-10-26';
   const endDate = parsed.end_date || startDate;
-  const { workingDays } = calculateWorkingDaysBetween(startDate, endDate);
+  const { workingDays } = await calculateWorkingDaysBetween(startDate, endDate);
 
   // Look up available balance for calling employee
   if (ctx.employeeId && matchedLeaveType) {
-    const balRow = queryOne<any>(
+    const balRow = await queryOne<any>(
       'SELECT total_days, used_days FROM leave_balances WHERE employee_id = ? AND leave_type_id = ? AND year = ?',
       [ctx.employeeId, matchedLeaveType.id, currentYear]
     );

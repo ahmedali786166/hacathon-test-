@@ -8,7 +8,8 @@ A complete, production-grade Human Capital Management (HCM) application built wi
 ## 🌟 Architecture & Features
 
 ### 1. Relational Database & Real Persistence
-- Powered by persistent SQLite engine with full relational schemas, foreign keys, constraints, and ACID transactions.
+- Powered by libSQL/SQLite with full relational schemas, foreign keys, constraints, and ACID transactions.
+- Runs on hosted Turso Cloud in production (`TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`) and falls back to a local SQLite file for development and tests.
 - Zero fake/dummy business data seeded. First-run onboarding wizard allows creating company settings, office rules, and the initial Administrator account. Public Admin registration is locked immediately after initialization.
 
 ### 2. Department & Designation Hierarchical Combobox
@@ -83,3 +84,11 @@ npx vitest run
 npm run build
 npm start
 ```
+
+### Deploy on Vercel
+The repository is Vercel-ready. Set these environment variables in the project:
+- `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` (hosted database)
+- `JWT_SECRET` (random secret for auth tokens)
+- `AI_API_KEY` (optional, enables the Gemini assistant)
+
+Vercel detects `server.ts` as the Express backend, builds the React app into `public/`, and serves it from the CDN.

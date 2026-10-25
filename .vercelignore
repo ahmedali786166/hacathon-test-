@@ -1,0 +1,12 @@
+node_modules
+.env*
+data
+*.sqlite
+*.db
+*.log
+.agents
+skills-lock.json
+tests
+public
+dist
+.git

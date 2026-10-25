@@ -75,30 +75,30 @@ describe('HCM Lite Comprehensive Test Suite', () => {
   });
 
   describe('2. Working Days, Holidays, and Weekend Exclusions', () => {
-    it('should calculate working days between dates excluding Saturdays and Sundays', () => {
+    it('should calculate working days between dates excluding Saturdays and Sundays', async () => {
       // 2026-10-19 (Monday) to 2026-10-25 (Sunday) = 5 working days (Mon-Fri) + 2 weekend days (Sat, Sun)
-      const res = calculateWorkingDaysBetween('2026-10-19', '2026-10-25', ['Saturday', 'Sunday']);
+      const res = await calculateWorkingDaysBetween('2026-10-19', '2026-10-25', ['Saturday', 'Sunday']);
       expect(res.workingDays).toBe(5);
       expect(res.weekendCount).toBe(2);
     });
 
-    it('should return 0 working days if range only contains weekend days', () => {
+    it('should return 0 working days if range only contains weekend days', async () => {
       // 2026-10-24 (Saturday) to 2026-10-25 (Sunday)
-      const res = calculateWorkingDaysBetween('2026-10-24', '2026-10-25', ['Saturday', 'Sunday']);
+      const res = await calculateWorkingDaysBetween('2026-10-24', '2026-10-25', ['Saturday', 'Sunday']);
       expect(res.workingDays).toBe(0);
       expect(res.weekendCount).toBe(2);
     });
 
-    it('should calculate working days in a month', () => {
+    it('should calculate working days in a month', async () => {
       // October 2026 has 31 days. 4 Saturdays, 4 Sundays = 8 weekend days. 31 - 8 = 23 working days.
-      const days = getWorkingDaysInMonth('2026-10');
+      const days = await getWorkingDaysInMonth('2026-10');
       expect(days).toBeGreaterThanOrEqual(20);
     });
   });
 
   describe('3. Database Relational Integrity and Schema Verification', () => {
-    it('should have tables created and enforce foreign keys', () => {
-      const tables = query<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'");
+    it('should have tables created and enforce foreign keys', async () => {
+      const tables = await query<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'");
       const tableNames = tables.map(t => t.name);
 
       expect(tableNames).toContain('company_settings');
@@ -116,28 +116,28 @@ describe('HCM Lite Comprehensive Test Suite', () => {
       expect(tableNames).toContain('ai_logs');
     });
 
-    it('should correctly link designation to department in database', () => {
+    it('should correctly link designation to department in database', async () => {
       const deptId = 'test-dept-1';
       const desigId = 'test-desig-1';
       const now = new Date().toISOString();
 
       // Clean test records if any
-      run('DELETE FROM designations WHERE id = ?', [desigId]);
-      run('DELETE FROM departments WHERE id = ?', [deptId]);
+      await run('DELETE FROM designations WHERE id = ?', [desigId]);
+      await run('DELETE FROM departments WHERE id = ?', [deptId]);
 
       // Insert department
-      run(
+      await run(
         'INSERT INTO departments (id, name, code, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
         [deptId, 'Engineering QA', 'ENG_QA', 'Software Engineering', now, now]
       );
 
       // Insert designation linked to dept
-      run(
+      await run(
         'INSERT INTO designations (id, department_id, title, code, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [desigId, deptId, 'Senior Fullstack Engineer', 'SR_FSE', 'Tech Lead', now, now]
       );
 
-      const queriedDesig = queryOne<any>(
+      const queriedDesig = await queryOne<any>(
         'SELECT des.*, d.name as dept_name FROM designations des JOIN departments d ON d.id = des.department_id WHERE des.id = ?',
         [desigId]
       );
@@ -147,8 +147,8 @@ describe('HCM Lite Comprehensive Test Suite', () => {
       expect(queriedDesig.department_id).toBe(deptId);
 
       // Clean up
-      run('DELETE FROM designations WHERE id = ?', [desigId]);
-      run('DELETE FROM departments WHERE id = ?', [deptId]);
+      await run('DELETE FROM designations WHERE id = ?', [desigId]);
+      await run('DELETE FROM departments WHERE id = ?', [deptId]);
     });
   });
 });

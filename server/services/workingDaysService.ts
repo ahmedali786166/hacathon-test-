@@ -7,8 +7,8 @@ export interface CompanySchedule {
   halfDayHours: number; // 5.0
 }
 
-export function getCompanySchedule(): CompanySchedule {
-  const settings = queryOne<any>('SELECT weekend_days, start_time, grace_minutes, half_day_hours FROM company_settings LIMIT 1');
+export async function getCompanySchedule(): Promise<CompanySchedule> {
+  const settings = await queryOne<any>('SELECT weekend_days, start_time, grace_minutes, half_day_hours FROM company_settings LIMIT 1');
   let weekendDays = ['Saturday', 'Sunday'];
   if (settings?.weekend_days) {
     try {
@@ -30,8 +30,12 @@ export function getDayName(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'long' });
 }
 
-export function isHoliday(dateStr: string): boolean {
-  const row = queryOne<{ count: number }>(
+export function getTodayDateStr(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(new Date());
+}
+
+export async function isHoliday(dateStr: string): Promise<boolean> {
+  const row = await queryOne<{ count: number }>(
     'SELECT count(1) as count FROM company_holidays WHERE date = ?',
     [dateStr]
   );
@@ -46,13 +50,13 @@ export function isWeekend(date: Date, weekendDays: string[]): boolean {
 /**
  * Calculates working days in a specified month (format 'YYYY-MM')
  */
-export function getWorkingDaysInMonth(yearMonth: string): number {
+export async function getWorkingDaysInMonth(yearMonth: string): Promise<number> {
   const [yearStr, monthStr] = yearMonth.split('-');
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10); // 1-12
 
-  const schedule = getCompanySchedule();
-  const holidays = query<{ date: string }>('SELECT date FROM company_holidays');
+  const schedule = await getCompanySchedule();
+  const holidays = await query<{ date: string }>('SELECT date FROM company_holidays');
   const holidaySet = new Set(holidays.map(h => h.date));
 
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -75,15 +79,15 @@ export function getWorkingDaysInMonth(yearMonth: string): number {
  * Calculates working days between start date and end date (inclusive)
  * Skipping configured weekends and holidays.
  */
-export function calculateWorkingDaysBetween(
+export async function calculateWorkingDaysBetween(
   startDateStr: string,
   endDateStr: string,
   customWeekendDays?: string[]
-): { workingDays: number; holidaysCount: number; weekendCount: number } {
-  const schedule = getCompanySchedule();
+): Promise<{ workingDays: number; holidaysCount: number; weekendCount: number }> {
+  const schedule = await getCompanySchedule();
   const weekends = customWeekendDays || schedule.weekendDays;
 
-  const holidays = query<{ date: string }>('SELECT date FROM company_holidays');
+  const holidays = await query<{ date: string }>('SELECT date FROM company_holidays');
   const holidaySet = new Set(holidays.map(h => h.date));
 
   const start = new Date(startDateStr);

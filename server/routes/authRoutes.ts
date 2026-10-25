@@ -8,10 +8,10 @@ import { logAudit } from '../services/auditService.js';
 export const authRouter = Router();
 
 // Check system setup status
-authRouter.get('/status', (req: Request, res: Response) => {
+authRouter.get('/status', async (req: Request, res: Response) => {
   try {
-    const adminUser = queryOne<any>("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
-    const settings = queryOne<any>('SELECT is_setup_complete, name, currency, timezone FROM company_settings LIMIT 1');
+    const adminUser = await queryOne<any>("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
+    const settings = await queryOne<any>('SELECT is_setup_complete, name, currency, timezone FROM company_settings LIMIT 1');
     const isSetupComplete = Boolean(settings?.is_setup_complete === 1 && adminUser);
 
     res.json({
@@ -31,8 +31,8 @@ authRouter.get('/status', (req: Request, res: Response) => {
 // First-run setup wizard: Creates company info + office rules + first Admin account.
 authRouter.post('/setup', async (req: Request, res: Response) => {
   try {
-    const adminUser = queryOne<any>("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
-    const existing = queryOne<any>('SELECT is_setup_complete FROM company_settings WHERE is_setup_complete = 1 LIMIT 1');
+    const adminUser = await queryOne<any>("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
+    const existing = await queryOne<any>('SELECT is_setup_complete FROM company_settings WHERE is_setup_complete = 1 LIMIT 1');
     if (existing && adminUser) {
       res.status(403).json({
         error: 'System has already been initialized. Please sign in with your administrator credentials.',
@@ -69,10 +69,10 @@ authRouter.post('/setup', async (req: Request, res: Response) => {
     const settingsId = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    transaction(() => {
+    await transaction(async () => {
       // 1. Save company settings
-      run('DELETE FROM company_settings');
-      run(
+      await run('DELETE FROM company_settings');
+      await run(
         `INSERT INTO company_settings (id, name, legal_name, currency, timezone, start_time, grace_minutes, half_day_hours, weekend_days, office_address, is_setup_complete, created_at, updated_at)
          VALUES (?, ?, ?, 'PKR', 'Asia/Karachi', ?, ?, ?, '["Saturday","Sunday"]', ?, 1, ?, ?)`,
         [settingsId, companyName, legalName || companyName, startTime, graceMinutes, halfDayHours, officeAddress || '', now, now]
@@ -86,10 +86,10 @@ authRouter.post('/setup', async (req: Request, res: Response) => {
         { name: 'Unpaid Leave', code: 'UNPAID', days: 0, isPaid: 0, desc: 'Leave without pay (unlimited)' },
       ];
 
-      run('DELETE FROM leave_types');
+      await run('DELETE FROM leave_types');
       for (const lt of defaultLeaveTypes) {
         const ltId = crypto.randomUUID();
-        run(
+        await run(
           `INSERT INTO leave_types (id, name, code, annual_days, is_paid, description, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [ltId, lt.name, lt.code, lt.days, lt.isPaid, lt.desc, now]
@@ -97,15 +97,15 @@ authRouter.post('/setup', async (req: Request, res: Response) => {
       }
 
       // 3. Create first Admin user (clear existing by email to avoid unique constraint)
-      run('DELETE FROM users WHERE email = ?', [adminEmail.toLowerCase().trim()]);
-      run(
+      await run('DELETE FROM users WHERE email = ?', [adminEmail.toLowerCase().trim()]);
+      await run(
         `INSERT INTO users (id, email, password_hash, role, employee_id, full_name, is_active, created_at, updated_at)
          VALUES (?, ?, ?, 'ADMIN', NULL, ?, 1, ?, ?)`,
         [adminId, adminEmail.toLowerCase().trim(), passwordHash, adminName, now, now]
       );
     });
 
-    logAudit({
+    await logAudit({
       actorId: adminId,
       actorEmail: adminEmail,
       actorRole: 'ADMIN',
@@ -151,7 +151,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
-    const user = queryOne<any>(
+    const user = await queryOne<any>(
       'SELECT id, email, password_hash, role, employee_id, full_name, is_active FROM users WHERE email = ?',
       [email.toLowerCase().trim()]
     );
@@ -188,7 +188,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    logAudit({
+    await logAudit({
       actorId: user.id,
       actorEmail: user.email,
       actorRole: user.role,
@@ -209,18 +209,18 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 });
 
 // Logout endpoint
-authRouter.post('/logout', (req: Request, res: Response) => {
+authRouter.post('/logout', async (req: Request, res: Response) => {
   res.clearCookie('hcm_token');
   res.json({ message: 'Signed out successfully' });
 });
 
 // Get current profile
-authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
+authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
   const user = req.user!;
   let employeeDetails: any = null;
 
   if (user.employee_id) {
-    employeeDetails = queryOne<any>(`
+    employeeDetails = await queryOne<any>(`
       SELECT e.*, d.name as department_name, des.title as designation_title 
       FROM employees e
       LEFT JOIN departments d ON d.id = e.department_id
@@ -244,7 +244,7 @@ authRouter.put('/change-password', requireAuth, async (req: Request, res: Respon
       return;
     }
 
-    const user = queryOne<any>('SELECT password_hash FROM users WHERE id = ?', [req.user!.id]);
+    const user = await queryOne<any>('SELECT password_hash FROM users WHERE id = ?', [req.user!.id]);
     const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
     if (!isMatch) {
       res.status(400).json({ error: 'Incorrect current password.' });
@@ -253,13 +253,13 @@ authRouter.put('/change-password', requireAuth, async (req: Request, res: Respon
 
     const salt = await bcrypt.genSalt(10);
     const newHash = await bcrypt.hash(newPassword, salt);
-    run('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', [
+    await run('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', [
       newHash,
       new Date().toISOString(),
       req.user!.id,
     ]);
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,

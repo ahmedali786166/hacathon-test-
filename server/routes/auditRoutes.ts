@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 export const auditRouter = Router();
 
 // Only ADMIN can view audit logs
-auditRouter.get('/', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+auditRouter.get('/', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { action, actorEmail, targetType, limit = '50', page = '1' } = req.query;
     const pageNum = Math.max(1, parseInt(page as string, 10));
@@ -29,10 +29,10 @@ auditRouter.get('/', requireAuth, requireRole(['ADMIN']), (req: Request, res: Re
     }
 
     const whereSql = whereClauses.join(' AND ');
-    const countRow = queryOne<any>(`SELECT count(1) as total FROM audit_logs WHERE ${whereSql}`, params);
+    const countRow = await queryOne<any>(`SELECT count(1) as total FROM audit_logs WHERE ${whereSql}`, params);
     const total = countRow?.total || 0;
 
-    const logs = query<any>(`
+    const logs = await query<any>(`
       SELECT * FROM audit_logs
       WHERE ${whereSql}
       ORDER BY created_at DESC

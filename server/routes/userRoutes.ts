@@ -8,9 +8,9 @@ import { logAudit } from '../services/auditService.js';
 export const userRouter = Router();
 
 // List users (Admin only)
-userRouter.get('/', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+userRouter.get('/', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
-    const users = query<any>(`
+    const users = await query<any>(`
       SELECT u.id, u.email, u.role, u.full_name, u.is_active, u.created_at,
              e.employee_code, d.name as department_name, des.title as designation_title
       FROM users u
@@ -40,7 +40,7 @@ userRouter.post('/', requireAuth, requireRole(['ADMIN']), async (req: Request, r
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const existing = queryOne<any>('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+    const existing = await queryOne<any>('SELECT id FROM users WHERE email = ?', [cleanEmail]);
     if (existing) {
       res.status(409).json({ error: 'A user with this email already exists.' });
       return;
@@ -56,14 +56,14 @@ userRouter.post('/', requireAuth, requireRole(['ADMIN']), async (req: Request, r
     const id = crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
-    run(
+    await run(
       `INSERT INTO users (id, email, password_hash, role, employee_id, full_name, is_active, created_at, updated_at)
        VALUES (?, ?, ?, ?, NULL, ?, 1, ?, ?)`,
       [id, cleanEmail, passwordHash, role, full_name.trim(), nowIso, nowIso]
     );
 
-    const created = queryOne<any>('SELECT id, email, role, full_name, is_active, created_at FROM users WHERE id = ?', [id]);
-    logAudit({
+    const created = await queryOne<any>('SELECT id, email, role, full_name, is_active, created_at FROM users WHERE id = ?', [id]);
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -81,7 +81,7 @@ userRouter.post('/', requireAuth, requireRole(['ADMIN']), async (req: Request, r
 });
 
 // Toggle user active status (Admin only)
-userRouter.patch('/:id/status', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+userRouter.patch('/:id/status', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { is_active } = req.body;
@@ -91,7 +91,7 @@ userRouter.patch('/:id/status', requireAuth, requireRole(['ADMIN']), (req: Reque
       return;
     }
 
-    const user = queryOne<any>('SELECT * FROM users WHERE id = ?', [id]);
+    const user = await queryOne<any>('SELECT * FROM users WHERE id = ?', [id]);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -99,9 +99,9 @@ userRouter.patch('/:id/status', requireAuth, requireRole(['ADMIN']), (req: Reque
 
     const newActive = is_active ? 1 : 0;
     const nowIso = new Date().toISOString();
-    run('UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?', [newActive, nowIso, id]);
+    await run('UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?', [newActive, nowIso, id]);
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,

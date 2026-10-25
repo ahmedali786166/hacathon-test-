@@ -9,12 +9,16 @@ export const organizationRouter = Router();
 // -------------------------------------------------------------
 // Company Settings
 // -------------------------------------------------------------
-organizationRouter.get('/settings', requireAuth, (req: Request, res: Response) => {
-  const settings = queryOne<any>('SELECT * FROM company_settings LIMIT 1');
-  res.json({ settings });
+organizationRouter.get('/settings', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const settings = await queryOne<any>('SELECT * FROM company_settings LIMIT 1');
+    res.json({ settings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-organizationRouter.put('/settings', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.put('/settings', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const {
       name,
@@ -29,10 +33,10 @@ organizationRouter.put('/settings', requireAuth, requireRole(['ADMIN']), (req: R
       geofence_radius_meters,
     } = req.body;
 
-    const before = queryOne<any>('SELECT * FROM company_settings LIMIT 1');
+    const before = await queryOne<any>('SELECT * FROM company_settings LIMIT 1');
     const now = new Date().toISOString();
 
-    run(
+    await run(
       `UPDATE company_settings SET
         name = COALESCE(?, name),
         legal_name = COALESCE(?, legal_name),
@@ -62,8 +66,8 @@ organizationRouter.put('/settings', requireAuth, requireRole(['ADMIN']), (req: R
       ]
     );
 
-    const after = queryOne<any>('SELECT * FROM company_settings LIMIT 1');
-    logAudit({
+    const after = await queryOne<any>('SELECT * FROM company_settings LIMIT 1');
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -84,9 +88,9 @@ organizationRouter.put('/settings', requireAuth, requireRole(['ADMIN']), (req: R
 // -------------------------------------------------------------
 // Departments CRUD (All authenticated users can read; Admin can manage)
 // -------------------------------------------------------------
-organizationRouter.get('/departments', requireAuth, (req: Request, res: Response) => {
+organizationRouter.get('/departments', requireAuth, async (req: Request, res: Response) => {
   try {
-    const departments = query<any>(`
+    const departments = await query<any>(`
       SELECT d.*, 
         (SELECT count(1) FROM employees e WHERE e.department_id = d.id AND e.status = 'ACTIVE') as active_employee_count,
         (SELECT count(1) FROM designations des WHERE des.department_id = d.id) as designation_count
@@ -99,7 +103,7 @@ organizationRouter.get('/departments', requireAuth, (req: Request, res: Response
   }
 });
 
-organizationRouter.post('/departments', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.post('/departments', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { name, code, description } = req.body;
     if (!name || !code) {
@@ -108,7 +112,7 @@ organizationRouter.post('/departments', requireAuth, requireRole(['ADMIN']), (re
     }
 
     const cleanCode = code.toUpperCase().trim();
-    const existing = queryOne<any>('SELECT id FROM departments WHERE name = ? OR code = ?', [name.trim(), cleanCode]);
+    const existing = await queryOne<any>('SELECT id FROM departments WHERE name = ? OR code = ?', [name.trim(), cleanCode]);
     if (existing) {
       res.status(409).json({ error: 'A department with this name or code already exists.' });
       return;
@@ -117,14 +121,14 @@ organizationRouter.post('/departments', requireAuth, requireRole(['ADMIN']), (re
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    run(
+    await run(
       `INSERT INTO departments (id, name, code, description, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [id, name.trim(), cleanCode, description || '', now, now]
     );
 
-    const created = queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
-    logAudit({
+    const created = await queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -141,19 +145,19 @@ organizationRouter.post('/departments', requireAuth, requireRole(['ADMIN']), (re
   }
 });
 
-organizationRouter.put('/departments/:id', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.put('/departments/:id', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, code, description } = req.body;
 
-    const before = queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
+    const before = await queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
     if (!before) {
       res.status(404).json({ error: 'Department not found' });
       return;
     }
 
     const now = new Date().toISOString();
-    run(
+    await run(
       `UPDATE departments SET
         name = COALESCE(?, name),
         code = COALESCE(?, code),
@@ -163,8 +167,8 @@ organizationRouter.put('/departments/:id', requireAuth, requireRole(['ADMIN']), 
       [name?.trim(), code?.toUpperCase().trim(), description, now, id]
     );
 
-    const after = queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
-    logAudit({
+    const after = await queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -182,25 +186,25 @@ organizationRouter.put('/departments/:id', requireAuth, requireRole(['ADMIN']), 
   }
 });
 
-organizationRouter.delete('/departments/:id', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.delete('/departments/:id', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const employeeCount = queryOne<any>('SELECT count(1) as c FROM employees WHERE department_id = ?', [id])?.c || 0;
+    const employeeCount = (await queryOne<any>('SELECT count(1) as c FROM employees WHERE department_id = ?', [id]))?.c || 0;
     if (employeeCount > 0) {
       res.status(400).json({ error: `Cannot delete department with ${employeeCount} assigned employees. Reassign them first.` });
       return;
     }
 
-    const before = queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
+    const before = await queryOne<any>('SELECT * FROM departments WHERE id = ?', [id]);
     if (!before) {
       res.status(404).json({ error: 'Department not found' });
       return;
     }
 
-    run('DELETE FROM designations WHERE department_id = ?', [id]);
-    run('DELETE FROM departments WHERE id = ?', [id]);
+    await run('DELETE FROM designations WHERE department_id = ?', [id]);
+    await run('DELETE FROM departments WHERE id = ?', [id]);
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -220,7 +224,7 @@ organizationRouter.delete('/departments/:id', requireAuth, requireRole(['ADMIN']
 // -------------------------------------------------------------
 // Designations CRUD (Linked to Departments)
 // -------------------------------------------------------------
-organizationRouter.get('/designations', requireAuth, (req: Request, res: Response) => {
+organizationRouter.get('/designations', requireAuth, async (req: Request, res: Response) => {
   try {
     const { departmentId } = req.query;
     let sql = `
@@ -237,14 +241,14 @@ organizationRouter.get('/designations', requireAuth, (req: Request, res: Respons
     }
 
     sql += ' ORDER BY des.title ASC';
-    const designations = query<any>(sql, params);
+    const designations = await query<any>(sql, params);
     res.json({ designations });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-organizationRouter.post('/designations', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.post('/designations', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { department_id, title, code, description } = req.body;
     if (!department_id || !title || !code) {
@@ -252,14 +256,14 @@ organizationRouter.post('/designations', requireAuth, requireRole(['ADMIN']), (r
       return;
     }
 
-    const dept = queryOne<any>('SELECT id, name FROM departments WHERE id = ?', [department_id]);
+    const dept = await queryOne<any>('SELECT id, name FROM departments WHERE id = ?', [department_id]);
     if (!dept) {
       res.status(400).json({ error: 'Invalid department ID. Department does not exist.' });
       return;
     }
 
     const cleanCode = code.toUpperCase().trim();
-    const existing = queryOne<any>(
+    const existing = await queryOne<any>(
       'SELECT id FROM designations WHERE department_id = ? AND (title = ? OR code = ?)',
       [department_id, title.trim(), cleanCode]
     );
@@ -271,20 +275,20 @@ organizationRouter.post('/designations', requireAuth, requireRole(['ADMIN']), (r
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    run(
+    await run(
       `INSERT INTO designations (id, department_id, title, code, description, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [id, department_id, title.trim(), cleanCode, description || '', now, now]
     );
 
-    const created = queryOne<any>(`
+    const created = await queryOne<any>(`
       SELECT des.*, d.name as department_name 
       FROM designations des 
       JOIN departments d ON d.id = des.department_id 
       WHERE des.id = ?
     `, [id]);
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -301,19 +305,19 @@ organizationRouter.post('/designations', requireAuth, requireRole(['ADMIN']), (r
   }
 });
 
-organizationRouter.put('/designations/:id', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.put('/designations/:id', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { title, code, description } = req.body;
 
-    const before = queryOne<any>('SELECT * FROM designations WHERE id = ?', [id]);
+    const before = await queryOne<any>('SELECT * FROM designations WHERE id = ?', [id]);
     if (!before) {
       res.status(404).json({ error: 'Designation not found' });
       return;
     }
 
     const now = new Date().toISOString();
-    run(
+    await run(
       `UPDATE designations SET
         title = COALESCE(?, title),
         code = COALESCE(?, code),
@@ -323,8 +327,8 @@ organizationRouter.put('/designations/:id', requireAuth, requireRole(['ADMIN']),
       [title?.trim(), code?.toUpperCase().trim(), description, now, id]
     );
 
-    const after = queryOne<any>('SELECT * FROM designations WHERE id = ?', [id]);
-    logAudit({
+    const after = await queryOne<any>('SELECT * FROM designations WHERE id = ?', [id]);
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -342,23 +346,23 @@ organizationRouter.put('/designations/:id', requireAuth, requireRole(['ADMIN']),
   }
 });
 
-organizationRouter.delete('/designations/:id', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.delete('/designations/:id', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const employeeCount = queryOne<any>('SELECT count(1) as c FROM employees WHERE designation_id = ?', [id])?.c || 0;
+    const employeeCount = (await queryOne<any>('SELECT count(1) as c FROM employees WHERE designation_id = ?', [id]))?.c || 0;
     if (employeeCount > 0) {
       res.status(400).json({ error: `Cannot delete designation with ${employeeCount} assigned employees.` });
       return;
     }
 
-    const before = queryOne<any>('SELECT * FROM designations WHERE id = ?', [id]);
+    const before = await queryOne<any>('SELECT * FROM designations WHERE id = ?', [id]);
     if (!before) {
       res.status(404).json({ error: 'Designation not found' });
       return;
     }
 
-    run('DELETE FROM designations WHERE id = ?', [id]);
-    logAudit({
+    await run('DELETE FROM designations WHERE id = ?', [id]);
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -378,12 +382,16 @@ organizationRouter.delete('/designations/:id', requireAuth, requireRole(['ADMIN'
 // -------------------------------------------------------------
 // Leave Types CRUD
 // -------------------------------------------------------------
-organizationRouter.get('/leave-types', requireAuth, (req: Request, res: Response) => {
-  const leaveTypes = query<any>('SELECT * FROM leave_types ORDER BY name ASC');
-  res.json({ leaveTypes });
+organizationRouter.get('/leave-types', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const leaveTypes = await query<any>('SELECT * FROM leave_types ORDER BY name ASC');
+    res.json({ leaveTypes });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-organizationRouter.post('/leave-types', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.post('/leave-types', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { name, code, annual_days, is_paid = 1, description } = req.body;
     if (!name || !code) {
@@ -392,7 +400,7 @@ organizationRouter.post('/leave-types', requireAuth, requireRole(['ADMIN']), (re
     }
 
     const cleanCode = code.toUpperCase().trim();
-    const existing = queryOne<any>('SELECT id FROM leave_types WHERE name = ? OR code = ?', [name.trim(), cleanCode]);
+    const existing = await queryOne<any>('SELECT id FROM leave_types WHERE name = ? OR code = ?', [name.trim(), cleanCode]);
     if (existing) {
       res.status(409).json({ error: 'Leave type already exists.' });
       return;
@@ -401,13 +409,13 @@ organizationRouter.post('/leave-types', requireAuth, requireRole(['ADMIN']), (re
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    run(
+    await run(
       `INSERT INTO leave_types (id, name, code, annual_days, is_paid, description, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [id, name.trim(), cleanCode, annual_days || 0, is_paid ? 1 : 0, description || '', now]
     );
 
-    const created = queryOne<any>('SELECT * FROM leave_types WHERE id = ?', [id]);
+    const created = await queryOne<any>('SELECT * FROM leave_types WHERE id = ?', [id]);
     res.status(201).json({ message: 'Leave type created', leaveType: created });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -417,12 +425,16 @@ organizationRouter.post('/leave-types', requireAuth, requireRole(['ADMIN']), (re
 // -------------------------------------------------------------
 // Company Holidays CRUD
 // -------------------------------------------------------------
-organizationRouter.get('/holidays', requireAuth, (req: Request, res: Response) => {
-  const holidays = query<any>('SELECT * FROM company_holidays ORDER BY date ASC');
-  res.json({ holidays });
+organizationRouter.get('/holidays', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const holidays = await query<any>('SELECT * FROM company_holidays ORDER BY date ASC');
+    res.json({ holidays });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-organizationRouter.post('/holidays', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.post('/holidays', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { name, date, is_recurring = 0 } = req.body;
     if (!name || !date) {
@@ -430,7 +442,7 @@ organizationRouter.post('/holidays', requireAuth, requireRole(['ADMIN']), (req: 
       return;
     }
 
-    const existing = queryOne<any>('SELECT id FROM company_holidays WHERE date = ?', [date]);
+    const existing = await queryOne<any>('SELECT id FROM company_holidays WHERE date = ?', [date]);
     if (existing) {
       res.status(409).json({ error: 'A holiday on this date already exists.' });
       return;
@@ -438,23 +450,23 @@ organizationRouter.post('/holidays', requireAuth, requireRole(['ADMIN']), (req: 
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    run(
+    await run(
       `INSERT INTO company_holidays (id, name, date, is_recurring, created_at)
        VALUES (?, ?, ?, ?, ?)`,
       [id, name.trim(), date, is_recurring ? 1 : 0, now]
     );
 
-    const created = queryOne<any>('SELECT * FROM company_holidays WHERE id = ?', [id]);
+    const created = await queryOne<any>('SELECT * FROM company_holidays WHERE id = ?', [id]);
     res.status(201).json({ message: 'Holiday created', holiday: created });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-organizationRouter.delete('/holidays/:id', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+organizationRouter.delete('/holidays/:id', requireAuth, requireRole(['ADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    run('DELETE FROM company_holidays WHERE id = ?', [id]);
+    await run('DELETE FROM company_holidays WHERE id = ?', [id]);
     res.json({ message: 'Holiday removed' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

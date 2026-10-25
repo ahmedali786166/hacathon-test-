@@ -11,9 +11,9 @@ export const payrollRouter = Router();
 // -------------------------------------------------------------
 // List All Payroll Runs (HR & Admin)
 // -------------------------------------------------------------
-payrollRouter.get('/runs', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+payrollRouter.get('/runs', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
-    const runs = query<any>(`
+    const runs = await query<any>(`
       SELECT pr.*, 
              u1.full_name as created_by_name,
              u2.full_name as locked_by_name,
@@ -32,7 +32,7 @@ payrollRouter.get('/runs', requireAuth, requireRole(['ADMIN', 'HR']), (req: Requ
 // -------------------------------------------------------------
 // Generate / Prepare Payroll Draft (HR & Admin)
 // -------------------------------------------------------------
-payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const { month } = req.body; // YYYY-MM
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
@@ -40,7 +40,7 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
       return;
     }
 
-    const existingRun = queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
+    const existingRun = await queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
     if (existingRun && existingRun.status === 'LOCKED') {
       res.status(400).json({
         error: `Payroll for ${month} is already finalized and locked. It cannot be recalculated.`,
@@ -48,8 +48,8 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
       return;
     }
 
-    const workingDays = getWorkingDaysInMonth(month);
-    const activeEmployees = query<any>(`
+    const workingDays = await getWorkingDaysInMonth(month);
+    const activeEmployees = await query<any>(`
       SELECT e.*, d.name as department_name, des.title as designation_title
       FROM employees e
       LEFT JOIN departments d ON d.id = e.department_id
@@ -75,7 +75,7 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
 
     for (const emp of activeEmployees) {
       // 1. Gather employee attendance for month
-      const attendanceRecords = query<any>(
+      const attendanceRecords = await query<any>(
         'SELECT status FROM attendance WHERE employee_id = ? AND date LIKE ?',
         [emp.id, `${month}%`]
       );
@@ -93,7 +93,7 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
       });
 
       // 2. Gather approved leaves
-      const approvedLeaves = query<any>(`
+      const approvedLeaves = await query<any>(`
         SELECT lr.total_days, lt.is_paid 
         FROM leave_requests lr
         JOIN leave_types lt ON lt.id = lr.leave_type_id
@@ -158,18 +158,18 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
       });
     }
 
-    transaction(() => {
+    await transaction(async () => {
       // Upsert payroll run
       if (existingRun) {
-        run(
+        await run(
           `UPDATE payroll_runs SET
             total_gross = ?, total_net = ?, total_tax = ?, total_deductions = ?, updated_at = ?
            WHERE id = ?`,
           [runTotalGross, runTotalNet, runTotalTax, runTotalDeductions, nowIso, runId]
         );
-        run('DELETE FROM payslips WHERE payroll_run_id = ?', [runId]);
+        await run('DELETE FROM payslips WHERE payroll_run_id = ?', [runId]);
       } else {
-        run(
+        await run(
           `INSERT INTO payroll_runs (id, month, status, total_gross, total_net, total_tax, total_deductions, created_by, locked_by, locked_at, created_at, updated_at)
            VALUES (?, ?, 'DRAFT', ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
           [runId, month, runTotalGross, runTotalNet, runTotalTax, runTotalDeductions, req.user!.id, nowIso, nowIso]
@@ -178,7 +178,7 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
 
       // Insert prepared payslips
       for (const p of preparedPayslips) {
-        run(
+        await run(
           `INSERT INTO payslips (id, payroll_run_id, employee_id, month, basic_salary, gross_salary, hra, medical_allowance, other_allowance, working_days, present_days, absent_days, half_days, leave_days, absent_deduction, half_day_deduction, tax_deduction, other_deductions, net_salary, is_locked, generated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
           [
@@ -207,7 +207,7 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
       }
     });
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -239,16 +239,15 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
 // -------------------------------------------------------------
 // Get Draft / Run Details for a Month (HR & Admin)
 // -------------------------------------------------------------
-payrollRouter.get('/draft/:month', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+payrollRouter.get('/draft/:month', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const { month } = req.params;
-    const run = queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
-    if (!run) {
+    const payrollRun = await queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
+    if (!payrollRun) {
       res.status(404).json({ error: `No payroll records found for ${month}.` });
       return;
     }
-
-    const payslips = query<any>(`
+    const payslips = await query<any>(`
       SELECT p.*, e.employee_code, e.first_name, e.last_name, e.email,
              d.name as department_name, des.title as designation_title
       FROM payslips p
@@ -257,9 +256,9 @@ payrollRouter.get('/draft/:month', requireAuth, requireRole(['ADMIN', 'HR']), (r
       LEFT JOIN designations des ON des.id = e.designation_id
       WHERE p.payroll_run_id = ?
       ORDER BY e.first_name ASC
-    `, [run.id]);
+    `, [payrollRun.id]);
 
-    res.json({ run, payslips });
+    res.json({ run: payrollRun, payslips });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -269,7 +268,7 @@ payrollRouter.get('/draft/:month', requireAuth, requireRole(['ADMIN', 'HR']), (r
 // Lock & Finalize Payroll (ADMIN EXCLUSIVE)
 // HR CANNOT LOCK!
 // -------------------------------------------------------------
-payrollRouter.post('/lock/:month', requireAuth, (req: Request, res: Response) => {
+payrollRouter.post('/lock/:month', requireAuth, async (req: Request, res: Response) => {
   try {
     // Strict Role Validation: Only ADMIN can lock payroll!
     if (req.user!.role !== 'ADMIN') {
@@ -280,32 +279,32 @@ payrollRouter.post('/lock/:month', requireAuth, (req: Request, res: Response) =>
     }
 
     const { month } = req.params;
-    const run = queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
-    if (!run) {
+    const payrollRun = await queryOne<any>('SELECT * FROM payroll_runs WHERE month = ?', [month]);
+    if (!payrollRun) {
       res.status(404).json({ error: `Payroll draft for ${month} not found.` });
       return;
     }
 
-    if (run.status === 'LOCKED') {
+    if (payrollRun.status === 'LOCKED') {
       res.status(400).json({ error: `Payroll for ${month} is already locked.` });
       return;
     }
 
     const nowIso = new Date().toISOString();
 
-    transaction(() => {
-      run(
+    await transaction(async () => {
+      await run(
         `UPDATE payroll_runs SET status = 'LOCKED', locked_by = ?, locked_at = ?, updated_at = ?
          WHERE id = ?`,
-        [req.user!.id, nowIso, nowIso, run.id]
+        [req.user!.id, nowIso, nowIso, payrollRun.id]
       );
 
-      run('UPDATE payslips SET is_locked = 1 WHERE payroll_run_id = ?', [run.id]);
+      await run('UPDATE payslips SET is_locked = 1 WHERE payroll_run_id = ?', [payrollRun.id]);
 
       // Notify all active employees about their published payslip
-      const users = query<any>('SELECT id, employee_id FROM users WHERE employee_id IS NOT NULL');
+      const users = await query<any>('SELECT id, employee_id FROM users WHERE employee_id IS NOT NULL');
       for (const u of users) {
-        run(
+        await run(
           `INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
            VALUES (?, ?, ?, ?, 'PAYROLL', 0, ?)`,
           [
@@ -319,13 +318,13 @@ payrollRouter.post('/lock/:month', requireAuth, (req: Request, res: Response) =>
       }
     });
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
       action: 'FINALIZE_AND_LOCK_PAYROLL',
       targetType: 'PAYROLL_RUN',
-      targetId: run.id,
+      targetId: payrollRun.id,
       beforeState: { status: 'DRAFT' },
       afterState: { status: 'LOCKED', lockedBy: req.user!.email, lockedAt: nowIso },
       ipAddress: req.ip,
@@ -340,7 +339,7 @@ payrollRouter.post('/lock/:month', requireAuth, (req: Request, res: Response) =>
 // -------------------------------------------------------------
 // Get Calling Employee's Finalized Payslips
 // -------------------------------------------------------------
-payrollRouter.get('/my-payslips', requireAuth, (req: Request, res: Response) => {
+payrollRouter.get('/my-payslips', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -348,7 +347,7 @@ payrollRouter.get('/my-payslips', requireAuth, (req: Request, res: Response) => 
       return;
     }
 
-    const payslips = query<any>(`
+    const payslips = await query<any>(`
       SELECT p.*, pr.status as run_status, pr.locked_at
       FROM payslips p
       JOIN payroll_runs pr ON pr.id = p.payroll_run_id
@@ -365,10 +364,10 @@ payrollRouter.get('/my-payslips', requireAuth, (req: Request, res: Response) => 
 // -------------------------------------------------------------
 // Get Single Payslip (Confidentiality: Only Admin, HR, or Owner!)
 // -------------------------------------------------------------
-payrollRouter.get('/payslip/:id', requireAuth, (req: Request, res: Response) => {
+payrollRouter.get('/payslip/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const payslip = queryOne<any>(`
+    const payslip = await queryOne<any>(`
       SELECT p.*, e.employee_code, e.first_name, e.last_name, e.email, e.join_date,
              d.name as department_name, des.title as designation_title,
              cs.name as company_name, cs.legal_name as company_legal_name, cs.office_address as company_address

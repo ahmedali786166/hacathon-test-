@@ -10,7 +10,7 @@ export const employeeRouter = Router();
 // -------------------------------------------------------------
 // Get Employees Directory (Search, filter, paginate)
 // -------------------------------------------------------------
-employeeRouter.get('/', requireAuth, (req: Request, res: Response) => {
+employeeRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const {
       search = '',
@@ -45,10 +45,10 @@ employeeRouter.get('/', requireAuth, (req: Request, res: Response) => {
 
     const whereSql = whereClauses.join(' AND ');
 
-    const countRow = queryOne<any>(`SELECT count(1) as total FROM employees e WHERE ${whereSql}`, params);
+    const countRow = await queryOne<any>(`SELECT count(1) as total FROM employees e WHERE ${whereSql}`, params);
     const total = countRow?.total || 0;
 
-    const employees = query<any>(`
+    const employees = await query<any>(`
       SELECT e.id, e.employee_code, e.first_name, e.last_name, e.email, e.phone,
              e.department_id, e.designation_id, e.join_date, e.status, e.basic_salary,
              d.name as department_name, des.title as designation_title,
@@ -89,7 +89,7 @@ employeeRouter.get('/', requireAuth, (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // Get Single Employee 360 Profile
 // -------------------------------------------------------------
-employeeRouter.get('/:id', requireAuth, (req: Request, res: Response) => {
+employeeRouter.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const isCallerPrivileged = req.user!.role === 'ADMIN' || req.user!.role === 'HR';
@@ -100,7 +100,7 @@ employeeRouter.get('/:id', requireAuth, (req: Request, res: Response) => {
       return;
     }
 
-    const employee = queryOne<any>(`
+    const employee = await queryOne<any>(`
       SELECT e.*, d.name as department_name, des.title as designation_title,
              u.id as user_id, u.email as user_email, u.role as user_role, u.is_active as user_active
       FROM employees e
@@ -116,7 +116,7 @@ employeeRouter.get('/:id', requireAuth, (req: Request, res: Response) => {
     }
 
     // Leave balances
-    const leaveBalances = query<any>(`
+    const leaveBalances = await query<any>(`
       SELECT lb.*, lt.name as leave_type_name, lt.code as leave_type_code, lt.is_paid
       FROM leave_balances lb
       JOIN leave_types lt ON lt.id = lb.leave_type_id
@@ -125,14 +125,14 @@ employeeRouter.get('/:id', requireAuth, (req: Request, res: Response) => {
     `, [id]);
 
     // Recent attendance (last 10 days)
-    const recentAttendance = query<any>(`
+    const recentAttendance = await query<any>(`
       SELECT * FROM attendance WHERE employee_id = ? ORDER BY date DESC LIMIT 10
     `, [id]);
 
     // Locked payslips (if privileged or self)
     let payslips: any[] = [];
     if (isCallerPrivileged || isSelf) {
-      payslips = query<any>(`
+      payslips = await query<any>(`
         SELECT p.*, pr.status as run_status 
         FROM payslips p
         JOIN payroll_runs pr ON pr.id = p.payroll_run_id
@@ -159,7 +159,7 @@ employeeRouter.get('/:id', requireAuth, (req: Request, res: Response) => {
 // Create Employee (HR & Admin only)
 // STRICT VALIDATION of Department, Designation, and their Relationship!
 // -------------------------------------------------------------
-employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const {
       employee_code,
@@ -185,7 +185,7 @@ employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reques
     const cleanEmail = email.toLowerCase().trim();
 
     // 1. Check duplicate code or email
-    const duplicate = queryOne<any>(
+    const duplicate = await queryOne<any>(
       'SELECT id FROM employees WHERE employee_code = ? OR email = ?',
       [cleanCode, cleanEmail]
     );
@@ -195,14 +195,14 @@ employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reques
     }
 
     // 2. Validate department exists
-    const dept = queryOne<any>('SELECT id, name FROM departments WHERE id = ?', [department_id]);
+    const dept = await queryOne<any>('SELECT id, name FROM departments WHERE id = ?', [department_id]);
     if (!dept) {
       res.status(400).json({ error: 'Selected Department does not exist. Please select a valid department.' });
       return;
     }
 
     // 3. Validate designation exists AND belongs to the selected department
-    const desig = queryOne<any>('SELECT id, title, department_id FROM designations WHERE id = ?', [designation_id]);
+    const desig = await queryOne<any>('SELECT id, title, department_id FROM designations WHERE id = ?', [designation_id]);
     if (!desig) {
       res.status(400).json({ error: 'Selected Designation does not exist.' });
       return;
@@ -219,9 +219,9 @@ employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reques
     const now = new Date().toISOString();
     const currentYear = new Date(join_date).getFullYear();
 
-    transaction(() => {
+    await transaction(async () => {
       // Insert employee
-      run(
+      await run(
         `INSERT INTO employees (id, employee_code, first_name, last_name, email, phone, department_id, designation_id, join_date, status, basic_salary, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -242,9 +242,9 @@ employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reques
       );
 
       // Auto-initialize standard leave balances from active leave types
-      const leaveTypes = query<any>('SELECT id, annual_days FROM leave_types');
+      const leaveTypes = await query<any>('SELECT id, annual_days FROM leave_types');
       for (const lt of leaveTypes) {
-        run(
+        await run(
           `INSERT INTO leave_balances (id, employee_id, leave_type_id, total_days, used_days, pending_days, year, created_at, updated_at)
            VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?)`,
           [crypto.randomUUID(), empId, lt.id, lt.annual_days, currentYear, now, now]
@@ -252,7 +252,7 @@ employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reques
       }
     });
 
-    const created = queryOne<any>(`
+    const created = await queryOne<any>(`
       SELECT e.*, d.name as department_name, des.title as designation_title 
       FROM employees e
       LEFT JOIN departments d ON d.id = e.department_id
@@ -260,7 +260,7 @@ employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reques
       WHERE e.id = ?
     `, [empId]);
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -280,7 +280,7 @@ employeeRouter.post('/', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reques
 // -------------------------------------------------------------
 // Update Employee
 // -------------------------------------------------------------
-employeeRouter.put('/:id', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+employeeRouter.put('/:id', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const {
@@ -294,7 +294,7 @@ employeeRouter.put('/:id', requireAuth, requireRole(['ADMIN', 'HR']), (req: Requ
       status,
     } = req.body;
 
-    const before = queryOne<any>('SELECT * FROM employees WHERE id = ?', [id]);
+    const before = await queryOne<any>('SELECT * FROM employees WHERE id = ?', [id]);
     if (!before) {
       res.status(404).json({ error: 'Employee not found' });
       return;
@@ -304,14 +304,14 @@ employeeRouter.put('/:id', requireAuth, requireRole(['ADMIN', 'HR']), (req: Requ
     const targetDesigId = designation_id || before.designation_id;
 
     // Validate department exists
-    const dept = queryOne<any>('SELECT id, name FROM departments WHERE id = ?', [targetDeptId]);
+    const dept = await queryOne<any>('SELECT id, name FROM departments WHERE id = ?', [targetDeptId]);
     if (!dept) {
       res.status(400).json({ error: 'Selected Department does not exist.' });
       return;
     }
 
     // Validate designation belongs to department
-    const desig = queryOne<any>('SELECT id, title, department_id FROM designations WHERE id = ?', [targetDesigId]);
+    const desig = await queryOne<any>('SELECT id, title, department_id FROM designations WHERE id = ?', [targetDesigId]);
     if (!desig) {
       res.status(400).json({ error: 'Selected Designation does not exist.' });
       return;
@@ -325,7 +325,7 @@ employeeRouter.put('/:id', requireAuth, requireRole(['ADMIN', 'HR']), (req: Requ
     }
 
     const now = new Date().toISOString();
-    run(
+    await run(
       `UPDATE employees SET
         first_name = COALESCE(?, first_name),
         last_name = COALESCE(?, last_name),
@@ -351,7 +351,7 @@ employeeRouter.put('/:id', requireAuth, requireRole(['ADMIN', 'HR']), (req: Requ
       ]
     );
 
-    const after = queryOne<any>(`
+    const after = await queryOne<any>(`
       SELECT e.*, d.name as department_name, des.title as designation_title 
       FROM employees e
       LEFT JOIN departments d ON d.id = e.department_id
@@ -359,7 +359,7 @@ employeeRouter.put('/:id', requireAuth, requireRole(['ADMIN', 'HR']), (req: Requ
       WHERE e.id = ?
     `, [id]);
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -385,13 +385,13 @@ employeeRouter.post('/:id/create-account', requireAuth, requireRole(['ADMIN', 'H
     const { id } = req.params;
     const { password, role = 'EMPLOYEE' } = req.body;
 
-    const emp = queryOne<any>('SELECT * FROM employees WHERE id = ?', [id]);
+    const emp = await queryOne<any>('SELECT * FROM employees WHERE id = ?', [id]);
     if (!emp) {
       res.status(404).json({ error: 'Employee not found' });
       return;
     }
 
-    const existingUser = queryOne<any>('SELECT id FROM users WHERE employee_id = ? OR email = ?', [id, emp.email]);
+    const existingUser = await queryOne<any>('SELECT id FROM users WHERE employee_id = ? OR email = ?', [id, emp.email]);
     if (existingUser) {
       res.status(409).json({ error: 'A login account already exists for this employee.' });
       return;
@@ -407,13 +407,13 @@ employeeRouter.post('/:id/create-account', requireAuth, requireRole(['ADMIN', 'H
     const userId = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    run(
+    await run(
       `INSERT INTO users (id, email, password_hash, role, employee_id, full_name, is_active, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [userId, emp.email, passwordHash, role, emp.id, `${emp.first_name} ${emp.last_name}`, now, now]
     );
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -436,7 +436,7 @@ employeeRouter.post('/:id/create-account', requireAuth, requireRole(['ADMIN', 'H
 // -------------------------------------------------------------
 // CSV Import (Preview & Execute)
 // -------------------------------------------------------------
-employeeRouter.post('/import-csv', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+employeeRouter.post('/import-csv', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const { rows, execute = false } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -444,9 +444,9 @@ employeeRouter.post('/import-csv', requireAuth, requireRole(['ADMIN', 'HR']), (r
       return;
     }
 
-    const departments = query<any>('SELECT id, name, code FROM departments');
-    const designations = query<any>('SELECT id, department_id, title, code FROM designations');
-    const existingEmployees = query<any>('SELECT employee_code, email FROM employees');
+    const departments = await query<any>('SELECT id, name, code FROM departments');
+    const designations = await query<any>('SELECT id, department_id, title, code FROM designations');
+    const existingEmployees = await query<any>('SELECT employee_code, email FROM employees');
 
     const deptMap = new Map<string, string>();
     departments.forEach(d => {
@@ -545,11 +545,11 @@ employeeRouter.post('/import-csv', requireAuth, requireRole(['ADMIN', 'HR']), (r
 
     // Execute batch insert in transaction
     const now = new Date().toISOString();
-    const leaveTypes = query<any>('SELECT id, annual_days FROM leave_types');
+    const leaveTypes = await query<any>('SELECT id, annual_days FROM leave_types');
 
-    transaction(() => {
+    await transaction(async () => {
       for (const emp of validatedRows) {
-        run(
+        await run(
           `INSERT INTO employees (id, employee_code, first_name, last_name, email, phone, department_id, designation_id, join_date, status, basic_salary, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -570,7 +570,7 @@ employeeRouter.post('/import-csv', requireAuth, requireRole(['ADMIN', 'HR']), (r
         );
 
         for (const lt of leaveTypes) {
-          run(
+          await run(
             `INSERT INTO leave_balances (id, employee_id, leave_type_id, total_days, used_days, pending_days, year, created_at, updated_at)
              VALUES (?, ?, ?, ?, 0, 0, 2026, ?, ?)`,
             [crypto.randomUUID(), emp.id, lt.id, lt.annual_days, now, now]
@@ -579,7 +579,7 @@ employeeRouter.post('/import-csv', requireAuth, requireRole(['ADMIN', 'HR']), (r
       }
     });
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,

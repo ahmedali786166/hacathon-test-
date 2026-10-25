@@ -1,51 +1,102 @@
-import initSqlJs from 'sql.js';
-import type { Database } from 'sql.js';
-import fs from 'fs';
-import path from 'path';
+import { createClient } from '@libsql/client';
+import type { Client, ResultSet, Transaction } from '@libsql/client';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
-let db: Database | null = null;
-const DB_FILE = process.env.DATABASE_FILE || path.join(process.cwd(), 'hcm_lite.sqlite');
+let client: Client | null = null;
+let initPromise: Promise<Client> | null = null;
+const transactionContext = new AsyncLocalStorage<Transaction>();
 
-export async function getDb(): Promise<Database> {
-  if (db) return db;
-
-  const SQL = await initSqlJs();
-  if (fs.existsSync(DB_FILE)) {
-    try {
-      const fileBuffer = fs.readFileSync(DB_FILE);
-      db = new SQL.Database(fileBuffer);
-    } catch (err) {
-      console.error('Failed to read existing database file, creating fresh database:', err);
-      db = new SQL.Database();
-    }
-  } else {
-    db = new SQL.Database();
+function resolveConnection(): { url: string; authToken?: string } {
+  const remoteUrl = process.env.TURSO_DATABASE_URL;
+  if (remoteUrl) {
+    return { url: remoteUrl, authToken: process.env.TURSO_AUTH_TOKEN };
   }
 
-  // Enforce foreign key constraints
-  db.run('PRAGMA foreign_keys = ON;');
-  initSchema(db);
-  saveDb();
+  const localFile = process.env.NODE_ENV === 'test'
+    ? 'test-hcm.sqlite'
+    : (process.env.DATABASE_FILE || 'hcm_lite.sqlite');
+  return { url: localFile.startsWith('file:') ? localFile : `file:${localFile}` };
+}
+
+export async function getDb(): Promise<Client> {
+  if (client) return client;
+  if (!initPromise) {
+    initPromise = initialize().catch((error) => {
+      initPromise = null;
+      client = null;
+      throw error;
+    });
+  }
+  return initPromise;
+}
+
+async function initialize(): Promise<Client> {
+  const { url, authToken } = resolveConnection();
+  const db = authToken
+    ? createClient({ url, authToken })
+    : createClient({ url });
+
+  if (url.startsWith('file:')) {
+    await db.execute('PRAGMA foreign_keys = ON;');
+  }
+
+  const existing = await db.execute(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'company_settings'"
+  );
+  if (existing.rows.length === 0) {
+    await db.batch(SCHEMA_STATEMENTS, 'write');
+  }
+
+  client = db;
   return db;
 }
 
-export function saveDb(): void {
-  if (!db) return;
+async function execute(sql: string, params: any[] = []): Promise<ResultSet> {
+  const args = params.map((value) => (value === undefined ? null : value));
+  const activeTransaction = transactionContext.getStore();
+  if (activeTransaction) {
+    return activeTransaction.execute({ sql, args });
+  }
+
+  const db = await getDb();
+  return db.execute({ sql, args });
+}
+
+export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+  const result = await execute(sql, params);
+  return result.rows as unknown as T[];
+}
+
+export async function queryOne<T = any>(sql: string, params: any[] = []): Promise<T | null> {
+  const rows = await query<T>(sql, params);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+export async function run(sql: string, params: any[] = []): Promise<{ changes: number }> {
+  const result = await execute(sql, params);
+  return { changes: result.rowsAffected };
+}
+
+export async function transaction<T>(callback: () => T | Promise<T>): Promise<T> {
+  if (transactionContext.getStore()) {
+    return callback();
+  }
+
+  const db = await getDb();
+  const tx = await db.transaction('write');
   try {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    const dir = path.dirname(DB_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(DB_FILE, buffer);
-  } catch (err) {
-    console.error('Error saving database to disk:', err);
+    const result = await transactionContext.run(tx, async () => callback());
+    await tx.commit();
+    return result;
+  } catch (error) {
+    try {
+      await tx.rollback();
+    } catch {}
+    throw error;
   }
 }
 
-function initSchema(database: Database): void {
-  database.run(`
+const SCHEMA_STATEMENTS = `
     -- Company Settings Table
     CREATE TABLE IF NOT EXISTS company_settings (
       id TEXT PRIMARY KEY,
@@ -172,9 +223,9 @@ function initSchema(database: Database): void {
     CREATE TABLE IF NOT EXISTS attendance (
       id TEXT PRIMARY KEY,
       employee_id TEXT NOT NULL,
-      date TEXT NOT NULL, -- YYYY-MM-DD
-      check_in_time TEXT, -- HH:mm:ss
-      check_out_time TEXT, -- HH:mm:ss
+      date TEXT NOT NULL,
+      check_in_time TEXT,
+      check_out_time TEXT,
       total_working_hours REAL DEFAULT 0,
       status TEXT NOT NULL CHECK(status IN ('PRESENT', 'LATE', 'HALF_DAY', 'ABSENT', 'ON_LEAVE', 'WEEKEND', 'HOLIDAY')),
       is_corrected INTEGER NOT NULL DEFAULT 0,
@@ -207,7 +258,7 @@ function initSchema(database: Database): void {
     CREATE TABLE IF NOT EXISTS company_holidays (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      date TEXT NOT NULL UNIQUE, -- YYYY-MM-DD
+      date TEXT NOT NULL UNIQUE,
       is_recurring INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
@@ -215,7 +266,7 @@ function initSchema(database: Database): void {
     -- Payroll Runs Table
     CREATE TABLE IF NOT EXISTS payroll_runs (
       id TEXT PRIMARY KEY,
-      month TEXT NOT NULL UNIQUE, -- YYYY-MM
+      month TEXT NOT NULL UNIQUE,
       status TEXT NOT NULL DEFAULT 'DRAFT' CHECK(status IN ('DRAFT', 'LOCKED')),
       total_gross REAL NOT NULL DEFAULT 0,
       total_net REAL NOT NULL DEFAULT 0,
@@ -235,7 +286,7 @@ function initSchema(database: Database): void {
       id TEXT PRIMARY KEY,
       payroll_run_id TEXT NOT NULL,
       employee_id TEXT NOT NULL,
-      month TEXT NOT NULL, -- YYYY-MM
+      month TEXT NOT NULL,
       basic_salary REAL NOT NULL,
       gross_salary REAL NOT NULL,
       hra REAL NOT NULL,
@@ -323,60 +374,13 @@ function initSchema(database: Database): void {
     CREATE INDEX IF NOT EXISTS idx_payslips_month ON payslips(month);
     CREATE INDEX IF NOT EXISTS idx_payslips_emp ON payslips(employee_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
-    CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
-  `);
-}
-
-// Synchronous query helper wrapping sql.js prepared statements
-export function query<T = any>(sql: string, params: any[] = []): T[] {
-  if (!db) throw new Error('Database not initialized');
-  const stmt = db.prepare(sql);
-  try {
-    stmt.bind(params);
-    const results: T[] = [];
-    while (stmt.step()) {
-      results.push(stmt.getAsObject() as unknown as T);
-    }
-    return results;
-  } finally {
-    stmt.free();
-  }
-}
-
-export function queryOne<T = any>(sql: string, params: any[] = []): T | null {
-  const rows = query<T>(sql, params);
-  return rows.length > 0 ? rows[0] : null;
-}
-
-let inTransaction = false;
-
-export function run(sql: string, params: any[] = []): { changes: number } {
-  if (!db) throw new Error('Database not initialized');
-  db.run(sql, params);
-  if (!inTransaction) {
-    saveDb();
-  }
-  return { changes: db.getRowsModified() };
-}
-
-export function transaction<T>(callback: () => T): T {
-  if (!db) throw new Error('Database not initialized');
-  if (inTransaction) {
-    return callback();
-  }
-  inTransaction = true;
-  db.run('BEGIN TRANSACTION;');
-  try {
-    const result = callback();
-    db.run('COMMIT;');
-    inTransaction = false;
-    saveDb();
-    return result;
-  } catch (error) {
-    inTransaction = false;
-    try {
-      db.run('ROLLBACK;');
-    } catch {}
-    throw error;
-  }
-}
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at)
+`
+  .split(';')
+  .map((statement) => statement.trim())
+  .filter((statement) => {
+    if (!statement) return false;
+    return statement
+      .split('\n')
+      .some((line) => line.trim() && !line.trim().startsWith('--'));
+  });

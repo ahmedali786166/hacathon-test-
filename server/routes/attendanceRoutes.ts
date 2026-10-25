@@ -10,7 +10,7 @@ export const attendanceRouter = Router();
 // -------------------------------------------------------------
 // Check-In (Employee checks in, server generates timestamp)
 // -------------------------------------------------------------
-attendanceRouter.post('/check-in', requireAuth, (req: Request, res: Response) => {
+attendanceRouter.post('/check-in', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -24,7 +24,7 @@ attendanceRouter.post('/check-in', requireAuth, (req: Request, res: Response) =>
     const timeStr = now.toTimeString().split(' ')[0]; // HH:mm:ss
 
     // Check duplicate check-in
-    const existing = queryOne<any>(
+    const existing = await queryOne<any>(
       'SELECT id, check_in_time FROM attendance WHERE employee_id = ? AND date = ?',
       [employeeId, dateStr]
     );
@@ -36,7 +36,7 @@ attendanceRouter.post('/check-in', requireAuth, (req: Request, res: Response) =>
       return;
     }
 
-    const schedule = getCompanySchedule();
+    const schedule = await getCompanySchedule();
     // Start time is 09:00, grace is 15 mins -> 09:15 threshold
     const [startH, startM] = schedule.startTime.split(':').map(Number);
     const lateThresholdMinutes = startH * 60 + startM + schedule.graceMinutes;
@@ -49,19 +49,19 @@ attendanceRouter.post('/check-in', requireAuth, (req: Request, res: Response) =>
     const nowIso = now.toISOString();
 
     if (existing) {
-      run(
+      await run(
         `UPDATE attendance SET check_in_time = ?, status = ?, updated_at = ? WHERE id = ?`,
         [timeStr, status, nowIso, existing.id]
       );
     } else {
-      run(
+      await run(
         `INSERT INTO attendance (id, employee_id, date, check_in_time, check_out_time, total_working_hours, status, is_corrected, created_at, updated_at)
          VALUES (?, ?, ?, ?, NULL, 0, ?, 0, ?, ?)`,
         [id, employeeId, dateStr, timeStr, status, nowIso, nowIso]
       );
     }
 
-    const record = queryOne<any>('SELECT * FROM attendance WHERE id = ?', [id]);
+    const record = await queryOne<any>('SELECT * FROM attendance WHERE id = ?', [id]);
     res.status(201).json({
       message: status === 'LATE' ? `Checked in at ${timeStr} (Marked Late)` : `Checked in successfully at ${timeStr}`,
       attendance: record,
@@ -74,7 +74,7 @@ attendanceRouter.post('/check-in', requireAuth, (req: Request, res: Response) =>
 // -------------------------------------------------------------
 // Check-Out (Employee checks out, server calculates duration)
 // -------------------------------------------------------------
-attendanceRouter.post('/check-out', requireAuth, (req: Request, res: Response) => {
+attendanceRouter.post('/check-out', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -86,7 +86,7 @@ attendanceRouter.post('/check-out', requireAuth, (req: Request, res: Response) =
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toTimeString().split(' ')[0]; // HH:mm:ss
 
-    const record = queryOne<any>(
+    const record = await queryOne<any>(
       'SELECT * FROM attendance WHERE employee_id = ? AND date = ?',
       [employeeId, dateStr]
     );
@@ -108,7 +108,7 @@ attendanceRouter.post('/check-out', requireAuth, (req: Request, res: Response) =
     const totalSeconds = (outH * 3600 + outM * 60 + outS) - (inH * 3600 + inM * 60 + inS);
     const totalHours = Math.max(0, Math.round((totalSeconds / 3600) * 100) / 100);
 
-    const schedule = getCompanySchedule();
+    const schedule = await getCompanySchedule();
     // If recorded working time is below half-day threshold (default 5.0 hours), classify as HALF_DAY
     let status = record.status;
     if (totalHours < schedule.halfDayHours) {
@@ -116,12 +116,12 @@ attendanceRouter.post('/check-out', requireAuth, (req: Request, res: Response) =
     }
 
     const nowIso = now.toISOString();
-    run(
+    await run(
       `UPDATE attendance SET check_out_time = ?, total_working_hours = ?, status = ?, updated_at = ? WHERE id = ?`,
       [timeStr, totalHours, status, nowIso, record.id]
     );
 
-    const updated = queryOne<any>('SELECT * FROM attendance WHERE id = ?', [record.id]);
+    const updated = await queryOne<any>('SELECT * FROM attendance WHERE id = ?', [record.id]);
     res.json({
       message: `Checked out successfully at ${timeStr}. Total hours: ${totalHours} hrs.${status === 'HALF_DAY' ? ' (Classified as Half-Day: under 5 hours)' : ''}`,
       attendance: updated,
@@ -134,7 +134,7 @@ attendanceRouter.post('/check-out', requireAuth, (req: Request, res: Response) =
 // -------------------------------------------------------------
 // Get Today's Attendance for Calling Employee
 // -------------------------------------------------------------
-attendanceRouter.get('/today', requireAuth, (req: Request, res: Response) => {
+attendanceRouter.get('/today', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -143,7 +143,7 @@ attendanceRouter.get('/today', requireAuth, (req: Request, res: Response) => {
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const record = queryOne<any>(
+    const record = await queryOne<any>(
       'SELECT * FROM attendance WHERE employee_id = ? AND date = ?',
       [employeeId, todayStr]
     );
@@ -156,7 +156,7 @@ attendanceRouter.get('/today', requireAuth, (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // Get Calling Employee's Attendance History
 // -------------------------------------------------------------
-attendanceRouter.get('/my-history', requireAuth, (req: Request, res: Response) => {
+attendanceRouter.get('/my-history', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -174,7 +174,7 @@ attendanceRouter.get('/my-history', requireAuth, (req: Request, res: Response) =
     }
 
     sql += ' ORDER BY date DESC';
-    const history = query<any>(sql, params);
+    const history = await query<any>(sql, params);
     res.json({ history });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -184,7 +184,7 @@ attendanceRouter.get('/my-history', requireAuth, (req: Request, res: Response) =
 // -------------------------------------------------------------
 // Get All Attendance (HR/Admin) with date, department, status filters
 // -------------------------------------------------------------
-attendanceRouter.get('/all', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+attendanceRouter.get('/all', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const { date, departmentId, status, employeeId } = req.query;
     let whereClauses = ['1=1'];
@@ -217,7 +217,7 @@ attendanceRouter.get('/all', requireAuth, requireRole(['ADMIN', 'HR']), (req: Re
       ORDER BY a.date DESC, a.check_in_time DESC
     `;
 
-    const records = query<any>(sql, params);
+    const records = await query<any>(sql, params);
     res.json({ attendance: records });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -227,7 +227,7 @@ attendanceRouter.get('/all', requireAuth, requireRole(['ADMIN', 'HR']), (req: Re
 // -------------------------------------------------------------
 // Attendance Correction (HR/Admin only with mandatory reason)
 // -------------------------------------------------------------
-attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const {
       employeeId,
@@ -245,7 +245,7 @@ attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), 
       return;
     }
 
-    const existing = queryOne<any>(
+    const existing = await queryOne<any>(
       'SELECT * FROM attendance WHERE employee_id = ? AND date = ?',
       [employeeId, date]
     );
@@ -253,7 +253,7 @@ attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), 
     const nowIso = new Date().toISOString();
     let attId = existing?.id;
 
-    transaction(() => {
+    await transaction(async () => {
       if (existing) {
         // Calculate new working hours if both in and out provided
         let totalHours = existing.total_working_hours;
@@ -263,7 +263,7 @@ attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), 
           totalHours = Math.max(0, Math.round(((outH * 60 + outM - (inH * 60 + inM)) / 60) * 100) / 100);
         }
 
-        run(
+        await run(
           `UPDATE attendance SET status = ?, check_in_time = ?, check_out_time = ?, total_working_hours = ?, is_corrected = 1, updated_at = ?
            WHERE id = ?`,
           [newStatus, newCheckIn || existing.check_in_time, newCheckOut || existing.check_out_time, totalHours, nowIso, existing.id]
@@ -276,7 +276,7 @@ attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), 
           const [outH, outM] = newCheckOut.split(':').map(Number);
           totalHours = Math.max(0, Math.round(((outH * 60 + outM - (inH * 60 + inM)) / 60) * 100) / 100);
         }
-        run(
+        await run(
           `INSERT INTO attendance (id, employee_id, date, check_in_time, check_out_time, total_working_hours, status, is_corrected, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
           [attId, employeeId, date, newCheckIn || null, newCheckOut || null, totalHours, newStatus, nowIso, nowIso]
@@ -285,7 +285,7 @@ attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), 
 
       // Record in attendance_corrections audit table
       const corrId = crypto.randomUUID();
-      run(
+      await run(
         `INSERT INTO attendance_corrections (id, attendance_id, employee_id, actor_id, original_status, new_status, original_check_in, new_check_in, original_check_out, new_check_out, reason, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -305,7 +305,7 @@ attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), 
       );
     });
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -317,7 +317,7 @@ attendanceRouter.post('/correction', requireAuth, requireRole(['ADMIN', 'HR']), 
       ipAddress: req.ip,
     });
 
-    const updated = queryOne<any>('SELECT * FROM attendance WHERE id = ?', [attId]);
+    const updated = await queryOne<any>('SELECT * FROM attendance WHERE id = ?', [attId]);
     res.json({ message: 'Attendance correction recorded successfully', attendance: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

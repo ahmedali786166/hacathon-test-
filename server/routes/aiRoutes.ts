@@ -5,7 +5,7 @@ import { chatWithAssistant, isGeminiConfigured, AssistantContext } from '../serv
 export const aiRouter = Router();
 
 // Check status without revealing secret
-aiRouter.get('/status', (req: Request, res: Response) => {
+aiRouter.get('/status', async (req: Request, res: Response) => {
   const configured = isGeminiConfigured();
   res.json({
     configured,
@@ -19,7 +19,7 @@ aiRouter.get('/status', (req: Request, res: Response) => {
 });
 
 // Role-tailored suggested prompts in Roman Urdu and English
-aiRouter.get('/suggested-prompts', (req: Request, res: Response) => {
+aiRouter.get('/suggested-prompts', async (req: Request, res: Response) => {
   const role = (req as any).user?.role || 'ADMIN';
 
   if (role === 'EMPLOYEE') {

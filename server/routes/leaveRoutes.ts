@@ -11,7 +11,7 @@ export const leaveRouter = Router();
 // -------------------------------------------------------------
 // Get Calling Employee's Leave Balances
 // -------------------------------------------------------------
-leaveRouter.get('/my-balances', requireAuth, (req: Request, res: Response) => {
+leaveRouter.get('/my-balances', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -20,7 +20,7 @@ leaveRouter.get('/my-balances', requireAuth, (req: Request, res: Response) => {
     }
 
     const currentYear = new Date().getFullYear();
-    const balances = query<any>(`
+    const balances = await query<any>(`
       SELECT lb.*, lt.name as leave_type_name, lt.code as leave_type_code, lt.is_paid,
              (lb.total_days - lb.used_days) as remaining_days
       FROM leave_balances lb
@@ -38,7 +38,7 @@ leaveRouter.get('/my-balances', requireAuth, (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // Get Calling Employee's Leave Requests History
 // -------------------------------------------------------------
-leaveRouter.get('/my-requests', requireAuth, (req: Request, res: Response) => {
+leaveRouter.get('/my-requests', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -46,7 +46,7 @@ leaveRouter.get('/my-requests', requireAuth, (req: Request, res: Response) => {
       return;
     }
 
-    const requests = query<any>(`
+    const requests = await query<any>(`
       SELECT lr.*, lt.name as leave_type_name, lt.code as leave_type_code,
              u.full_name as reviewer_name
       FROM leave_requests lr
@@ -94,7 +94,7 @@ leaveRouter.post('/smart-parse', requireAuth, async (req: Request, res: Response
 // -------------------------------------------------------------
 // Apply for Leave (Working day calculation, overlap & balance validation)
 // -------------------------------------------------------------
-leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
+leaveRouter.post('/apply', requireAuth, async (req: Request, res: Response) => {
   try {
     const employeeId = req.user!.employee_id;
     if (!employeeId) {
@@ -114,7 +114,7 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
     }
 
     // 1. Calculate working days (excluding weekends and company holidays)
-    const { workingDays } = calculateWorkingDaysBetween(startDate, endDate);
+    const { workingDays } = await calculateWorkingDaysBetween(startDate, endDate);
     if (workingDays <= 0) {
       res.status(422).json({
         error: 'The selected dates contain only weekends or company holidays. No working days need leave.',
@@ -123,7 +123,7 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
     }
 
     // 2. Reject overlapping active requests (PENDING or APPROVED) with HTTP 422
-    const overlap = queryOne<any>(`
+    const overlap = await queryOne<any>(`
       SELECT id, start_date, end_date, status FROM leave_requests
       WHERE employee_id = ?
         AND status IN ('PENDING', 'APPROVED')
@@ -143,7 +143,7 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
     }
 
     // 3. Validate leave balance if paid leave
-    const leaveType = queryOne<any>('SELECT * FROM leave_types WHERE id = ?', [leaveTypeId]);
+    const leaveType = await queryOne<any>('SELECT * FROM leave_types WHERE id = ?', [leaveTypeId]);
     if (!leaveType) {
       res.status(400).json({ error: 'Invalid leave type.' });
       return;
@@ -151,7 +151,7 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
 
     const currentYear = new Date(startDate).getFullYear();
     if (leaveType.is_paid === 1) {
-      const balance = queryOne<any>(
+      const balance = await queryOne<any>(
         'SELECT total_days, used_days, pending_days FROM leave_balances WHERE employee_id = ? AND leave_type_id = ? AND year = ?',
         [employeeId, leaveTypeId, currentYear]
       );
@@ -168,9 +168,9 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
     const reqId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
-    transaction(() => {
+    await transaction(async () => {
       // Create request
-      run(
+      await run(
         `INSERT INTO leave_requests (id, employee_id, leave_type_id, start_date, end_date, total_days, reason, status, reviewer_id, review_timestamp, review_comment, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', NULL, NULL, NULL, ?, ?)`,
         [reqId, employeeId, leaveTypeId, startDate, endDate, workingDays, reason.trim(), nowIso, nowIso]
@@ -178,7 +178,7 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
 
       // If paid, increment pending_days in balance
       if (leaveType.is_paid === 1) {
-        run(
+        await run(
           `UPDATE leave_balances SET pending_days = pending_days + ?, updated_at = ?
            WHERE employee_id = ? AND leave_type_id = ? AND year = ?`,
           [workingDays, nowIso, employeeId, leaveTypeId, currentYear]
@@ -186,7 +186,7 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
       }
     });
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -197,7 +197,7 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
       ipAddress: req.ip,
     });
 
-    const created = queryOne<any>('SELECT * FROM leave_requests WHERE id = ?', [reqId]);
+    const created = await queryOne<any>('SELECT * FROM leave_requests WHERE id = ?', [reqId]);
     res.status(201).json({
       message: `Leave request for ${workingDays} working day(s) submitted successfully.`,
       leaveRequest: created,
@@ -210,9 +210,9 @@ leaveRouter.post('/apply', requireAuth, (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // HR/Admin Approval Queue
 // -------------------------------------------------------------
-leaveRouter.get('/queue', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+leaveRouter.get('/queue', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
-    const queue = query<any>(`
+    const queue = await query<any>(`
       SELECT lr.*, lt.name as leave_type_name, lt.code as leave_type_code, lt.is_paid,
              e.employee_code, e.first_name, e.last_name, d.name as department_name, des.title as designation_title,
              u.full_name as reviewer_name
@@ -234,7 +234,7 @@ leaveRouter.get('/queue', requireAuth, requireRole(['ADMIN', 'HR']), (req: Reque
 // -------------------------------------------------------------
 // HR/Admin Approve or Reject Leave Request
 // -------------------------------------------------------------
-leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req: Request, res: Response) => {
+leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { action, comment = '' } = req.body; // action: 'APPROVE' | 'REJECT'
@@ -244,7 +244,7 @@ leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req:
       return;
     }
 
-    const leaveReq = queryOne<any>('SELECT * FROM leave_requests WHERE id = ?', [id]);
+    const leaveReq = await queryOne<any>('SELECT * FROM leave_requests WHERE id = ?', [id]);
     if (!leaveReq) {
       res.status(404).json({ error: 'Leave request not found.' });
       return;
@@ -255,14 +255,14 @@ leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req:
       return;
     }
 
-    const leaveType = queryOne<any>('SELECT * FROM leave_types WHERE id = ?', [leaveReq.leave_type_id]);
+    const leaveType = await queryOne<any>('SELECT * FROM leave_types WHERE id = ?', [leaveReq.leave_type_id]);
     const currentYear = new Date(leaveReq.start_date).getFullYear();
     const nowIso = new Date().toISOString();
     const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
 
-    transaction(() => {
+    await transaction(async () => {
       // 1. Update request
-      run(
+      await run(
         `UPDATE leave_requests SET status = ?, reviewer_id = ?, review_timestamp = ?, review_comment = ?, updated_at = ?
          WHERE id = ?`,
         [newStatus, req.user!.id, nowIso, comment, nowIso, id]
@@ -272,7 +272,7 @@ leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req:
       if (leaveType?.is_paid === 1) {
         if (action === 'APPROVE') {
           // move from pending to used
-          run(
+          await run(
             `UPDATE leave_balances SET
               used_days = used_days + ?,
               pending_days = MAX(0, pending_days - ?),
@@ -282,7 +282,7 @@ leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req:
           );
         } else {
           // release pending
-          run(
+          await run(
             `UPDATE leave_balances SET
               pending_days = MAX(0, pending_days - ?),
               updated_at = ?
@@ -293,9 +293,9 @@ leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req:
       }
 
       // 3. Notify employee
-      const empUser = queryOne<any>('SELECT id FROM users WHERE employee_id = ?', [leaveReq.employee_id]);
+      const empUser = await queryOne<any>('SELECT id FROM users WHERE employee_id = ?', [leaveReq.employee_id]);
       if (empUser) {
-        run(
+        await run(
           `INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
            VALUES (?, ?, ?, ?, 'LEAVE', 0, ?)`,
           [
@@ -309,7 +309,7 @@ leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req:
       }
     });
 
-    logAudit({
+    await logAudit({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
       actorRole: req.user!.role,
@@ -330,12 +330,12 @@ leaveRouter.post('/:id/review', requireAuth, requireRole(['ADMIN', 'HR']), (req:
 // -------------------------------------------------------------
 // Team Leave Calendar (All approved leaves in month)
 // -------------------------------------------------------------
-leaveRouter.get('/calendar', requireAuth, (req: Request, res: Response) => {
+leaveRouter.get('/calendar', requireAuth, async (req: Request, res: Response) => {
   try {
     const { month } = req.query; // YYYY-MM
     const currentMonth = month || new Date().toISOString().substring(0, 7);
 
-    const leaves = query<any>(`
+    const leaves = await query<any>(`
       SELECT lr.*, lt.name as leave_type_name, lt.code as leave_type_code,
              e.employee_code, e.first_name, e.last_name, d.name as department_name
       FROM leave_requests lr
