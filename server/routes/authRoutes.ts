@@ -28,30 +28,13 @@ authRouter.get('/status', async (req: Request, res: Response) => {
   }
 });
 
-// First-run setup wizard: Creates company info + office rules + first Admin account.
-// If the system is already initialized, the current admin password is required to
-// re-run the wizard and update company settings + admin credentials.
+// Setup wizard: Creates or updates company info + office rules + Admin account.
+// Runs like a website signup — the submitted email/password become the login.
 authRouter.post('/setup', async (req: Request, res: Response) => {
   try {
-    const adminUser = await queryOne<any>("SELECT id, password_hash FROM users WHERE role = 'ADMIN' LIMIT 1");
+    const adminUser = await queryOne<any>("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
     const existing = await queryOne<any>('SELECT is_setup_complete FROM company_settings WHERE is_setup_complete = 1 LIMIT 1');
     const isInitialized = Boolean(existing && adminUser);
-
-    if (isInitialized && !req.body.currentAdminPassword) {
-      res.status(403).json({
-        error: 'System already initialized. Enter the current admin password to update credentials.',
-        requiresCurrentPassword: true,
-      });
-      return;
-    }
-
-    if (isInitialized) {
-      const passwordMatches = await bcrypt.compare(req.body.currentAdminPassword, adminUser.password_hash);
-      if (!passwordMatches) {
-        res.status(403).json({ error: 'Current admin password is incorrect.', requiresCurrentPassword: true });
-        return;
-      }
-    }
 
     const {
       companyName,

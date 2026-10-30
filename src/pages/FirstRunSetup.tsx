@@ -5,10 +5,9 @@ import { apiFetch } from '../api/client.js';
 interface Props {
   onSetupComplete: (user: any, token: string) => void;
   onGoToLogin?: () => void;
-  requireCurrentPassword?: boolean;
 }
 
-export const FirstRunSetup: React.FC<Props> = ({ onSetupComplete, onGoToLogin, requireCurrentPassword = false }) => {
+export const FirstRunSetup: React.FC<Props> = ({ onSetupComplete, onGoToLogin }) => {
   const [companyName, setCompanyName] = useState('Saylani Technology Solutions');
   const [legalName, setLegalName] = useState('Saylani Technology Solutions (Pvt.) Ltd.');
   const [officeAddress, setOfficeAddress] = useState('Shahrah-e-Faisal, Karachi, Pakistan');
@@ -19,7 +18,6 @@ export const FirstRunSetup: React.FC<Props> = ({ onSetupComplete, onGoToLogin, r
   const [adminName, setAdminName] = useState('System Administrator');
   const [adminEmail, setAdminEmail] = useState('admin@saylani.org');
   const [adminPassword, setAdminPassword] = useState('Admin@1234');
-  const [currentAdminPassword, setCurrentAdminPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +40,6 @@ export const FirstRunSetup: React.FC<Props> = ({ onSetupComplete, onGoToLogin, r
           adminName,
           adminEmail,
           adminPassword,
-          currentAdminPassword: requireCurrentPassword ? currentAdminPassword : undefined,
         }),
       });
 
@@ -64,10 +61,10 @@ export const FirstRunSetup: React.FC<Props> = ({ onSetupComplete, onGoToLogin, r
             <Building className="w-6 h-6 text-slate-950" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">
-            HCM Lite Setup Wizard
+            Sign Up — HCM Lite
           </h1>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Saylani Hackathon Edition. Initialize your company settings and create the primary Administrator account. The fresh database will contain zero dummy business records.
+            Create your company workspace and admin account in one step. The email and password you set below become your permanent sign-in credentials.
           </p>
         </div>
 
@@ -172,66 +169,42 @@ export const FirstRunSetup: React.FC<Props> = ({ onSetupComplete, onGoToLogin, r
             </div>
           </div>
 
-          {/* Section 3: Primary Admin User */}
+          {/* Section 3: Admin Sign Up */}
           <div className="space-y-3 pt-2 border-t border-slate-800">
             <div className="flex items-center gap-2 text-xs font-bold text-[#D6B46A] uppercase tracking-wider">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{requireCurrentPassword ? '3. Update Administrator Credentials' : '3. Primary Administrator Credentials'}</span>
+              <span>3. Create Your Admin Account</span>
             </div>
-            {requireCurrentPassword && (
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[11px] text-amber-300">
-                System is already initialized. Enter the <strong>current admin password</strong> below to update the company settings and set a new login email/password.
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={adminName}
+                  onChange={e => setAdminName(e.target.value)}
+                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-[#D6B46A]"
+                />
               </div>
-            )}
-            <div className={`grid grid-cols-1 gap-3 ${requireCurrentPassword ? '' : 'md:grid-cols-3'}`}>
-              <div className={requireCurrentPassword ? 'grid grid-cols-1 md:grid-cols-2 gap-3' : ''}>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={adminName}
-                    onChange={e => setAdminName(e.target.value)}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-[#D6B46A]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Admin Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={adminEmail}
-                    onChange={e => setAdminEmail(e.target.value)}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-[#D6B46A]"
-                  />
-                </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={adminEmail}
+                  onChange={e => setAdminEmail(e.target.value)}
+                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-[#D6B46A]"
+                />
               </div>
-              <div className={requireCurrentPassword ? 'grid grid-cols-1 md:grid-cols-2 gap-3' : ''}>
-                {requireCurrentPassword && (
-                  <div>
-                    <label className="block text-[11px] font-semibold text-amber-300 mb-1">Current Admin Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={currentAdminPassword}
-                      onChange={e => setCurrentAdminPassword(e.target.value)}
-                      placeholder="Password you currently sign in with"
-                      className="w-full bg-[#111827] border border-amber-500/50 rounded-xl px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-                )}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                    {requireCurrentPassword ? 'New Password' : 'Password'}
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={adminPassword}
-                    onChange={e => setAdminPassword(e.target.value)}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-[#D6B46A]"
-                  />
-                </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-[#D6B46A]"
+                />
               </div>
             </div>
           </div>
@@ -242,13 +215,11 @@ export const FirstRunSetup: React.FC<Props> = ({ onSetupComplete, onGoToLogin, r
               disabled={loading}
               className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#D6B46A] via-amber-500 to-[#D6B46A] text-slate-950 font-bold text-sm tracking-wide shadow-lg shadow-[#D6B46A]/20 hover:opacity-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <span>{loading ? (requireCurrentPassword ? 'Updating Credentials...' : 'Initializing System...') : (requireCurrentPassword ? 'Update Credentials & Enter HCM Lite' : 'Complete Initialization & Enter HCM Lite')}</span>
+              <span>{loading ? 'Creating Account...' : 'Sign Up & Enter HCM Lite'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
             <p className="text-[10px] text-center text-slate-400 mt-2">
-              {requireCurrentPassword
-                ? 'Your new email and password will be used for all future sign ins.'
-                : 'Public Admin registration will be permanently closed once initialized.'}
+              Your email and password above become your permanent sign-in credentials.
             </p>
             {onGoToLogin && (
               <div className="text-center pt-3 border-t border-slate-800/80 mt-3">

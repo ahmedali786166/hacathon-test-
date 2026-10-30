@@ -87,7 +87,6 @@ export function App() {
   if ((!isSetupComplete || forceSetupView) && !forceLoginView) {
     return (
       <FirstRunSetup
-        requireCurrentPassword={Boolean(isSetupComplete)}
         onSetupComplete={(user, token) => {
           setIsSetupComplete(true);
           setCurrentUser(user);

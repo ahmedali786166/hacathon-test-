@@ -106,7 +106,7 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, companyName = 'HCM 
                 onClick={onGoToSetup}
                 className="text-[#D6B46A] hover:underline cursor-pointer"
               >
-                Need to initialize the company? Open Setup Wizard →
+                New here? Sign Up & Create Your Company →
               </button>
             </div>
           )}
