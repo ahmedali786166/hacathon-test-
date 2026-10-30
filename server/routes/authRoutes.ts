@@ -29,16 +29,28 @@ authRouter.get('/status', async (req: Request, res: Response) => {
 });
 
 // First-run setup wizard: Creates company info + office rules + first Admin account.
+// If the system is already initialized, the current admin password is required to
+// re-run the wizard and update company settings + admin credentials.
 authRouter.post('/setup', async (req: Request, res: Response) => {
   try {
-    const adminUser = await queryOne<any>("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
+    const adminUser = await queryOne<any>("SELECT id, password_hash FROM users WHERE role = 'ADMIN' LIMIT 1");
     const existing = await queryOne<any>('SELECT is_setup_complete FROM company_settings WHERE is_setup_complete = 1 LIMIT 1');
-    if (existing && adminUser) {
+    const isInitialized = Boolean(existing && adminUser);
+
+    if (isInitialized && !req.body.currentAdminPassword) {
       res.status(403).json({
-        error: 'System has already been initialized. Please sign in with your administrator credentials.',
-        isSetupComplete: true,
+        error: 'System already initialized. Enter the current admin password to update credentials.',
+        requiresCurrentPassword: true,
       });
       return;
+    }
+
+    if (isInitialized) {
+      const passwordMatches = await bcrypt.compare(req.body.currentAdminPassword, adminUser.password_hash);
+      if (!passwordMatches) {
+        res.status(403).json({ error: 'Current admin password is incorrect.', requiresCurrentPassword: true });
+        return;
+      }
     }
 
     const {
@@ -65,9 +77,48 @@ authRouter.post('/setup', async (req: Request, res: Response) => {
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(adminPassword, salt);
+    const now = new Date().toISOString();
+    const email = adminEmail.toLowerCase().trim();
+
+    if (isInitialized) {
+      await transaction(async () => {
+        await run(
+          `UPDATE company_settings
+           SET name = ?, legal_name = ?, office_address = ?, start_time = ?, grace_minutes = ?, half_day_hours = ?, updated_at = ?
+           WHERE is_setup_complete = 1`,
+          [companyName, legalName || companyName, officeAddress || '', startTime, graceMinutes, halfDayHours, now]
+        );
+        await run(
+          'UPDATE users SET email = ?, password_hash = ?, full_name = ?, updated_at = ? WHERE id = ?',
+          [email, passwordHash, adminName, now, adminUser.id]
+        );
+      });
+
+      await logAudit({
+        actorId: adminUser.id,
+        actorEmail: email,
+        actorRole: 'ADMIN',
+        action: 'SYSTEM_REINITIALIZATION',
+        targetType: 'SYSTEM',
+        targetId: adminUser.id,
+        afterState: { companyName, adminEmail: email },
+        ipAddress: req.ip,
+      });
+
+      const userObj = { id: adminUser.id, email, role: 'ADMIN' as const, full_name: adminName };
+      const token = generateToken(userObj);
+      res.cookie('hcm_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      res.json({ message: 'Credentials updated successfully.', token, user: userObj });
+      return;
+    }
+
     const adminId = crypto.randomUUID();
     const settingsId = crypto.randomUUID();
-    const now = new Date().toISOString();
 
     await transaction(async () => {
       // 1. Save company settings
