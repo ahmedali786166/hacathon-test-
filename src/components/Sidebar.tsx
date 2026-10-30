@@ -9,6 +9,7 @@ import {
   Megaphone,
   Settings,
   ShieldAlert,
+  UserCircle,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -24,7 +25,8 @@ export type NavTab =
   | 'ai'
   | 'announcements'
   | 'organization'
-  | 'audit';
+  | 'audit'
+  | 'profile';
 
 interface Props {
   activeTab: NavTab;
@@ -67,6 +69,7 @@ export const Sidebar: React.FC<Props> = ({
       highlight: true,
     },
     { id: 'announcements' as NavTab, label: 'Announcements', icon: Megaphone, roles: ['ADMIN', 'HR', 'EMPLOYEE'] },
+    { id: 'profile' as NavTab, label: 'My Profile', icon: UserCircle, roles: ['ADMIN', 'HR', 'EMPLOYEE'] },
     { id: 'organization' as NavTab, label: 'Organization', icon: Settings, roles: ['ADMIN', 'HR'] },
     { id: 'audit' as NavTab, label: 'Audit Trail', icon: ShieldAlert, roles: ['ADMIN'] },
   ];

@@ -15,6 +15,7 @@ import { PayrollPage } from './pages/PayrollPage.js';
 import { OrganizationPage } from './pages/OrganizationPage.js';
 import { AnnouncementsPage } from './pages/AnnouncementsPage.js';
 import { AuditPage } from './pages/AuditPage.js';
+import { ProfilePage } from './pages/ProfilePage.js';
 import { RefreshCw } from 'lucide-react';
 
 export function App() {
@@ -181,6 +182,10 @@ export function App() {
 
           {activeTab === 'audit' && (
             <AuditPage />
+          )}
+
+          {activeTab === 'profile' && (
+            <ProfilePage user={currentUser} />
           )}
         </main>
       </div>
