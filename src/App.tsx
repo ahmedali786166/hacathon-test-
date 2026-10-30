@@ -23,6 +23,7 @@ export function App() {
   const [companyInfo, setCompanyInfo] = useState<any | null>(null);
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [forceLoginView, setForceLoginView] = useState<boolean>(false);
+  const [forceSetupView, setForceSetupView] = useState<boolean>(false);
 
   // App Layout State
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
@@ -82,14 +83,18 @@ export function App() {
   }
 
   // 1. First-Run Setup Wizard
-  if (!isSetupComplete && !forceLoginView) {
+  if ((!isSetupComplete || forceSetupView) && !forceLoginView) {
     return (
       <FirstRunSetup
         onSetupComplete={(user, token) => {
           setIsSetupComplete(true);
           setCurrentUser(user);
+          setForceSetupView(false);
         }}
-        onGoToLogin={() => setForceLoginView(true)}
+        onGoToLogin={() => {
+          setForceSetupView(false);
+          setForceLoginView(true);
+        }}
       />
     );
   }
@@ -102,7 +107,7 @@ export function App() {
         onLoginSuccess={(user, token) => {
           setCurrentUser(user);
         }}
-        onGoToSetup={() => setForceLoginView(false)}
+        onGoToSetup={() => setForceSetupView(true)}
       />
     );
   }
