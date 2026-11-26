@@ -18,6 +18,7 @@ import { aiRouter, chatHandler } from './server/routes/aiRoutes.js';
 import { communicationRouter } from './server/routes/communicationRoutes.js';
 import { auditRouter } from './server/routes/auditRoutes.js';
 import { userRouter } from './server/routes/userRoutes.js';
+import { demoRouter } from './server/routes/demoRoutes.js';
 
 const app = express();
 
@@ -72,6 +73,7 @@ app.post('/api/chat', chatHandler);
 app.use('/api/communication', communicationRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/users', userRouter);
+app.use('/api/demo', demoRouter);
 
 const isProduction = process.env.NODE_ENV === 'production';
 const staticPath = path.join(process.cwd(), isProduction ? 'public' : 'dist');

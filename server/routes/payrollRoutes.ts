@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { query, queryOne, run, transaction } from '../db/database.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { computeMonthlyPayroll, formatPKR } from '../services/payrollCalculations.js';
-import { getWorkingDaysInMonth } from '../services/workingDaysService.js';
+import { getWorkingDaysInMonth, getElapsedWorkingDaysInMonth } from '../services/workingDaysService.js';
 import { logAudit } from '../services/auditService.js';
 
 export const payrollRouter = Router();
@@ -49,6 +49,7 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
     }
 
     const workingDays = await getWorkingDaysInMonth(month);
+    const elapsedWorkingDays = await getElapsedWorkingDaysInMonth(month);
     const activeEmployees = await query<any>(`
       SELECT e.*, d.name as department_name, des.title as designation_title
       FROM employees e
@@ -108,10 +109,8 @@ payrollRouter.post('/generate-draft', requireAuth, requireRole(['ADMIN', 'HR']),
         else unpaidLeaveDays += l.total_days;
       });
 
-      // Total working days accounted for
-      const accountedDays = presentDays + (halfDays * 0.5) + paidLeaveDays + unpaidLeaveDays + recordedAbsent;
-      // Any remaining unaccounted working days on working calendar default to absent
-      const totalAbsentDays = Math.max(0, workingDays - (presentDays + (halfDays * 0.5) + paidLeaveDays));
+      // Unaccounted working days default to absent, but only for days that have elapsed.
+      const totalAbsentDays = Math.max(0, elapsedWorkingDays - (presentDays + (halfDays * 0.5) + paidLeaveDays + unpaidLeaveDays));
 
       // 3. Compute salary breakdown & tax
       const comp = computeMonthlyPayroll({

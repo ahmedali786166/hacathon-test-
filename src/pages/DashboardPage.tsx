@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Megaphone,
+  Database,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
 import { formatPKR } from '../../server/services/payrollCalculations.js';
@@ -28,6 +29,8 @@ export const DashboardPage: React.FC<Props> = ({ userRole, userName, onNavigateT
   const [loading, setLoading] = useState<boolean>(true);
   const [checkInLoading, setCheckInLoading] = useState<boolean>(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState<boolean>(false);
+  const [seedMsg, setSeedMsg] = useState<string | null>(null);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -70,6 +73,20 @@ export const DashboardPage: React.FC<Props> = ({ userRole, userName, onNavigateT
       setActionMsg(err.message);
     } finally {
       setCheckInLoading(false);
+    }
+  };
+
+  const handleSeedDemo = async () => {
+    setSeeding(true);
+    setSeedMsg(null);
+    try {
+      const res = await apiFetch<any>('/api/demo/seed', { method: 'POST' });
+      setSeedMsg(res.message || 'Sample workspace loaded.');
+      await fetchStats();
+    } catch (err: any) {
+      setSeedMsg(err.message || 'Failed to load sample workspace.');
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -233,6 +250,36 @@ export const DashboardPage: React.FC<Props> = ({ userRole, userName, onNavigateT
 
   return (
     <div className="space-y-6">
+      {userRole === 'ADMIN' && headcount.active <= 1 && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#D6B46A]/10 via-[#D6B46A]/5 to-transparent border border-[#D6B46A]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#D6B46A]/15 text-[#D6B46A] flex items-center justify-center flex-shrink-0">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[#D6B46A] uppercase tracking-wider">Evaluating HCM Lite?</p>
+              <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                Load a sample workspace with 6 employees, month-to-date attendance, leave requests and balances — one click, removable anytime.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleSeedDemo}
+            disabled={seeding}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D6B46A] to-amber-600 text-slate-950 font-bold text-xs shadow-md shadow-[#D6B46A]/20 hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex-shrink-0 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{seeding ? 'Loading sample data…' : 'Load sample workspace'}</span>
+          </button>
+        </div>
+      )}
+
+      {seedMsg && (
+        <div className="p-3 bg-[#D6B46A]/10 border border-[#D6B46A]/30 rounded-xl text-xs text-[#D6B46A] font-medium">
+          {seedMsg}
+        </div>
+      )}
+
       {/* Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Headcount */}

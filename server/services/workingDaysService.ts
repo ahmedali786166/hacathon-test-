@@ -76,6 +76,37 @@ export async function getWorkingDaysInMonth(yearMonth: string): Promise<number> 
 }
 
 /**
+ * Working days elapsed in the month up to today (Karachi time).
+ * Used so a mid-month payroll draft does not deduct future days as absent.
+ */
+export async function getElapsedWorkingDaysInMonth(yearMonth: string): Promise<number> {
+  const todayStr = getTodayDateStr();
+  const currentMonth = todayStr.slice(0, 7);
+  if (yearMonth > currentMonth) return 0;
+  if (yearMonth < currentMonth) return getWorkingDaysInMonth(yearMonth);
+
+  const [yearStr, monthStr] = yearMonth.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const lastDay = parseInt(todayStr.slice(8, 10), 10);
+
+  const schedule = await getCompanySchedule();
+  const holidays = await query<{ date: string }>('SELECT date FROM company_holidays');
+  const holidaySet = new Set(holidays.map(h => h.date));
+
+  let workingDays = 0;
+  for (let day = 1; day <= lastDay; day++) {
+    const d = new Date(Date.UTC(year, month - 1, day));
+    const isoDate = d.toISOString().split('T')[0];
+    if (!schedule.weekendDays.includes(getDayName(d)) && !holidaySet.has(isoDate)) {
+      workingDays++;
+    }
+  }
+
+  return workingDays;
+}
+
+/**
  * Calculates working days between start date and end date (inclusive)
  * Skipping configured weekends and holidays.
  */
