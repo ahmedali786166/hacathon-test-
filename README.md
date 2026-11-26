@@ -1,7 +1,11 @@
 # HCM Lite - Human Capital Management System
 **Saylani Hackathon Full-Stack Submission**
 
-A complete, production-grade Human Capital Management (HCM) application built with React, TypeScript, Tailwind CSS, Express, a persistent relational database, and Google's Gemini AI Assistant (supporting fluent English and Roman Urdu).
+[**Live Demo**](https://hacathon-test.vercel.app) · [GitHub Repo](https://github.com/ahmedali786166/hacathon-test-)
+
+![HCM Lite dashboard](docs/dashboard.jpg)
+
+A complete, production-grade Human Capital Management (HCM) application built with React, TypeScript, Tailwind CSS, Express, a persistent relational database (Turso Cloud / SQLite), and Google's Gemini AI Assistant (supporting fluent English and Roman Urdu).
 
 ---
 
@@ -10,7 +14,7 @@ A complete, production-grade Human Capital Management (HCM) application built wi
 ### 1. Relational Database & Real Persistence
 - Powered by libSQL/SQLite with full relational schemas, foreign keys, constraints, and ACID transactions.
 - Runs on hosted Turso Cloud in production (`TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`) and falls back to a local SQLite file for development and tests.
-- Zero fake/dummy business data seeded. First-run onboarding wizard allows creating company settings, office rules, and the initial Administrator account. Public Admin registration is locked immediately after initialization.
+- Zero fake/dummy business data seeded. The onboarding wizard creates company settings, office rules, and an Administrator account; the email and password entered there become the sign-in credentials. On the public demo deployment the wizard can be re-run freely so evaluators can create their own workspace (admin password changes are also available under My Profile).
 
 ### 2. Department & Designation Hierarchical Combobox
 - Solves the previous dropdown issue:
