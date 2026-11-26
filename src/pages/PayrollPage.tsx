@@ -11,6 +11,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
+import { todayKarachi } from '../lib/dates.js';
 import { formatPKR } from '../../server/services/payrollCalculations.js';
 import { generatePayslipPdf } from '../utils/pdfGenerator.js';
 
@@ -19,7 +20,7 @@ interface Props {
 }
 
 export const PayrollPage: React.FC<Props> = ({ userRole }) => {
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-10');
+  const [selectedMonth, setSelectedMonth] = useState<string>(todayKarachi().slice(0, 7));
   const [runs, setRuns] = useState<any[]>([]);
   const [currentRun, setCurrentRun] = useState<any | null>(null);
   const [payslips, setPayslips] = useState<any[]>([]);

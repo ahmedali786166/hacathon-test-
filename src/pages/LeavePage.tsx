@@ -14,6 +14,7 @@ import {
   Languages,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
+import { karachiMonthYear, todayKarachi } from '../lib/dates.js';
 
 interface Props {
   userRole: 'ADMIN' | 'HR' | 'EMPLOYEE';
@@ -31,8 +32,8 @@ export const LeavePage: React.FC<Props> = ({ userRole }) => {
 
   // Apply form state
   const [selectedType, setSelectedType] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('2026-10-26');
-  const [endDate, setEndDate] = useState<string>('2026-10-27');
+  const [startDate, setStartDate] = useState<string>(todayKarachi());
+  const [endDate, setEndDate] = useState<string>(todayKarachi());
   const [reason, setReason] = useState<string>('');
   const [applyLoading, setApplyLoading] = useState<boolean>(false);
   const [formMsg, setFormMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -68,7 +69,7 @@ export const LeavePage: React.FC<Props> = ({ userRole }) => {
       }
 
       // Calendar
-      const calRes = await apiFetch<any>('/api/leave/calendar?month=2026-10');
+      const calRes = await apiFetch<any>(`/api/leave/calendar?month=${todayKarachi().slice(0, 7)}`);
       setTeamCalendar(calRes.leaves || []);
     } catch (err: any) {
       console.error(err);
@@ -577,7 +578,7 @@ export const LeavePage: React.FC<Props> = ({ userRole }) => {
       {activeTab === 'calendar' && (
         <div className="p-5 bg-[#111827] border border-slate-800 rounded-2xl space-y-3">
           <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <Users className="w-4 h-4 text-[#D6B46A]" /> Approved Leaves Calendar (October 2026)
+            <Users className="w-4 h-4 text-[#D6B46A]" /> Approved Leaves Calendar ({karachiMonthYear()})
           </h3>
           <div className="divide-y divide-slate-800">
             {teamCalendar.length === 0 ? (

@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
+import { todayKarachi } from '../lib/dates.js';
 
 interface Props {
   userRole: 'ADMIN' | 'HR' | 'EMPLOYEE';
@@ -51,7 +52,7 @@ export const OrganizationPage: React.FC<Props> = ({ userRole }) => {
   // Holidays State
   const [holidays, setHolidays] = useState<any[]>([]);
   const [newHolName, setNewHolName] = useState<string>('');
-  const [newHolDate, setNewHolDate] = useState<string>('2026-11-09');
+  const [newHolDate, setNewHolDate] = useState<string>(todayKarachi());
 
   // Users State (Admin only)
   const [users, setUsers] = useState<any[]>([]);

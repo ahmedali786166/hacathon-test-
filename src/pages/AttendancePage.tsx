@@ -13,6 +13,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
+import { karachiMonthYear, todayKarachi } from '../lib/dates.js';
 
 interface Props {
   userRole: 'ADMIN' | 'HR' | 'EMPLOYEE';
@@ -28,7 +29,7 @@ export const AttendancePage: React.FC<Props> = ({ userRole }) => {
   // HR / Admin log state
   const [allAttendance, setAllAttendance] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>('2026-10-24');
+  const [selectedDate, setSelectedDate] = useState<string>(todayKarachi());
   const [selectedDept, setSelectedDept] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [logLoading, setLogLoading] = useState<boolean>(false);
@@ -47,7 +48,7 @@ export const AttendancePage: React.FC<Props> = ({ userRole }) => {
     try {
       const todayRes = await apiFetch<any>('/api/attendance/today');
       setTodayAtt(todayRes.attendance);
-      const histRes = await apiFetch<any>('/api/attendance/my-history?month=2026-10');
+      const histRes = await apiFetch<any>(`/api/attendance/my-history?month=${todayKarachi().slice(0, 7)}`);
       setMyHistory(histRes.history || []);
     } catch {}
   };
@@ -346,7 +347,7 @@ export const AttendancePage: React.FC<Props> = ({ userRole }) => {
       {/* Employee's Personal Monthly Log */}
       <div className="space-y-3">
         <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-[#D6B46A]" /> My Attendance History (October 2026)
+          <Clock className="w-4 h-4 text-[#D6B46A]" /> My Attendance History ({karachiMonthYear()})
         </h3>
         <div className="bg-[#111827] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
           <table className="w-full text-left text-xs text-slate-300">

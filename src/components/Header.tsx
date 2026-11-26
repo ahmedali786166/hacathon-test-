@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Sparkles, User, ShieldCheck, CheckCheck } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
+import { karachiLongDate } from '../lib/dates.js';
 
 interface Props {
   title: string;
@@ -67,7 +68,7 @@ export const Header: React.FC<Props> = ({ title, user, onOpenAi }) => {
         {/* System Date Badge */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Saturday, Oct 24, 2026 (PKT)</span>
+          <span>{karachiLongDate()} (PKT)</span>
         </div>
 
         {/* AI Assistant Quick Launcher */}

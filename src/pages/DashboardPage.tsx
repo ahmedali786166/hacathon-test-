@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
 import { formatPKR } from '../../server/services/payrollCalculations.js';
+import { karachiLongDate, todayKarachi } from '../lib/dates.js';
 
 interface Props {
   userRole: 'ADMIN' | 'HR' | 'EMPLOYEE';
@@ -100,7 +101,7 @@ export const DashboardPage: React.FC<Props> = ({ userRole, userName, onNavigateT
               Welcome back, {userName}
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Today is Saturday, Oct 24, 2026. Manage your attendance, leave requests, and finalized payslips.
+              Today is {karachiLongDate()}. Manage your attendance, leave requests, and finalized payslips.
             </p>
           </div>
           <button
@@ -176,7 +177,7 @@ export const DashboardPage: React.FC<Props> = ({ userRole, userName, onNavigateT
           <div className="p-5 bg-[#111827] border border-slate-800 rounded-2xl space-y-4 md:col-span-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <CalendarCheck className="w-4 h-4 text-[#D6B46A]" /> Leave Balances (2026)
+                <CalendarCheck className="w-4 h-4 text-[#D6B46A]" /> Leave Balances ({todayKarachi().slice(0, 4)})
               </span>
               <button
                 onClick={() => onNavigateTab('leave')}
@@ -323,7 +324,7 @@ export const DashboardPage: React.FC<Props> = ({ userRole, userName, onNavigateT
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#D6B46A]" /> Today's Attendance Real-Time
             </h3>
-            <span className="text-[10px] text-slate-400">2026-10-24</span>
+            <span className="text-[10px] text-slate-400">{todayKarachi()}</span>
           </div>
 
           <div className="space-y-3 pt-2">

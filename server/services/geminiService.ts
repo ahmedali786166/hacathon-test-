@@ -549,11 +549,17 @@ export async function parseSmartLeaveRequest(
   const leaveTypes = await query<any>('SELECT id, name, code FROM leave_types');
 
   let availableBalance = 0;
-  const currentYear = 2026;
+  const currentYear = Number(getTodayDateStr().slice(0, 4));
+  const todayStr = getTodayDateStr();
+  const addDays = (d: string, n: number) => {
+    const dt = new Date(`${d}T00:00:00`);
+    dt.setDate(dt.getDate() + n);
+    return new Intl.DateTimeFormat('en-CA').format(dt);
+  };
 
   const prompt = `
 You are an intelligent HR assistant parsing a natural language leave application in English or Roman Urdu.
-Today's Date: 2026-10-24 (Saturday).
+Today's Date: ${todayStr}.
 Company Leave Types Available: ${JSON.stringify(leaveTypes)}
 
 User Prompt: "${text}"
@@ -561,8 +567,8 @@ User Prompt: "${text}"
 Instructions:
 Extract the following in JSON format:
 - leave_type_name: matching one of the available leave types (e.g. "Annual Leave", "Sick Leave", "Casual Leave", or "Unpaid Leave").
-- start_date: ISO date YYYY-MM-DD. If user says "next Monday", calculate it based on today (2026-10-24 is Saturday, so next Monday is 2026-10-26). If user says "kal", calculate based on context.
-- end_date: ISO date YYYY-MM-DD. If user says "for two days" starting Monday, end date is Tuesday 2026-10-27.
+- start_date: ISO date YYYY-MM-DD. If user says "next Monday", calculate it based on today (${todayStr}). If user says "kal", calculate based on context.
+- end_date: ISO date YYYY-MM-DD. If user says "for two days" starting Monday, end date is one day later.
 - reason: clean summary of reason in the user's language or English.
 - summary: short friendly 1-sentence interpretation in Roman Urdu or English (e.g. "Sick Leave for 2 days from Oct 26 to Oct 27, 2026").
 
@@ -599,9 +605,9 @@ Respond strictly in valid JSON matching this schema:
     const isCasual = text.toLowerCase().includes('casual') || text.toLowerCase().includes('kaam');
     const matchedType = leaveTypes.find(lt => isSick ? lt.code === 'SICK' : (isCasual ? lt.code === 'CASUAL' : lt.code === 'ANNUAL')) || leaveTypes[0];
 
-    const startDate = '2026-10-26';
+    const startDate = addDays(todayStr, 1);
     const duration = text.includes('3') || text.includes('teen') ? 3 : (text.includes('2') || text.includes('do') ? 2 : 1);
-    const endDate = duration === 1 ? '2026-10-26' : (duration === 2 ? '2026-10-27' : '2026-10-28');
+    const endDate = addDays(startDate, duration - 1);
 
     parsed = {
       leave_type_name: matchedType ? matchedType.name : 'Casual Leave',
@@ -621,7 +627,7 @@ Respond strictly in valid JSON matching this schema:
   }
 
   // Calculate working days
-  const startDate = parsed.start_date || '2026-10-26';
+  const startDate = parsed.start_date || addDays(todayStr, 1);
   const endDate = parsed.end_date || startDate;
   const { workingDays } = await calculateWorkingDaysBetween(startDate, endDate);
 

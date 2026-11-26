@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { query, queryOne, run, transaction } from '../db/database.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { logAudit } from '../services/auditService.js';
+import { getTodayDateStr } from '../services/workingDaysService.js';
 
 export const employeeRouter = Router();
 
@@ -474,7 +475,7 @@ employeeRouter.post('/import-csv', requireAuth, requireRole(['ADMIN', 'HR']), as
       const email = (row.email || '').toLowerCase().trim();
       const deptName = (row.department || '').toLowerCase().trim();
       const desigName = (row.designation || '').toLowerCase().trim();
-      const joinDate = (row.join_date || '2026-10-01').trim();
+      const joinDate = (row.join_date || getTodayDateStr()).trim();
       const salary = Number(row.basic_salary) || 0;
 
       if (!code || !firstName || !lastName || !email) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, AlertCircle, RefreshCw, UserPlus, UserCheck } from 'lucide-react';
 import { DepartmentDesignationCombobox } from './DepartmentDesignationCombobox.js';
 import { apiFetch } from '../api/client.js';
+import { todayKarachi } from '../lib/dates.js';
 
 interface Props {
   isOpen: boolean;
@@ -25,7 +26,7 @@ export const EmployeeModal: React.FC<Props> = ({
   const [phone, setPhone] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [designationId, setDesignationId] = useState('');
-  const [joinDate, setJoinDate] = useState('2026-10-01');
+  const [joinDate, setJoinDate] = useState(todayKarachi());
   const [basicSalary, setBasicSalary] = useState<number>(80000);
   const [status, setStatus] = useState('ACTIVE');
 
@@ -41,7 +42,7 @@ export const EmployeeModal: React.FC<Props> = ({
       setPhone(employeeToEdit.phone || '');
       setDepartmentId(employeeToEdit.department_id || '');
       setDesignationId(employeeToEdit.designation_id || '');
-      setJoinDate(employeeToEdit.join_date || '2026-10-01');
+      setJoinDate(employeeToEdit.join_date || todayKarachi());
       setBasicSalary(employeeToEdit.basic_salary ?? 80000);
       setStatus(employeeToEdit.status || 'ACTIVE');
     } else {
